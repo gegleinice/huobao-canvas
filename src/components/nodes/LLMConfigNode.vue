@@ -136,7 +136,7 @@ import { ref, watch, computed } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin, NSelect } from 'naive-ui'
 import { TrashOutline, CopyOutline, ChatbubbleOutline, SparklesOutline, ListOutline, ImageOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode, addNodes, addEdges, nodes, startBatchOperation, endBatchOperation } from '../../stores/canvas'
+import { updateNode, removeNode, duplicateNode, addNodes, addEdges, nodes, edges, startBatchOperation, endBatchOperation } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useChat, useApiConfig } from '../../hooks'
 
@@ -297,17 +297,44 @@ const handleCopyOutput = async () => {
 }
 
 /**
+ * Parse text into paragraphs
+ * 解析文本为段落 - 连续的非空行合并为一个段落，空行作为分隔符
+ */
+const parseParagraphs = (text) => {
+  const lines = text.split('\n')
+  const paragraphs = []
+  let current = ''
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed === '') {
+      // Empty line - separator
+      if (current.trim()) {
+        paragraphs.push(current.trim())
+        current = ''
+      }
+    } else {
+      // Non-empty line - append to current paragraph
+      current += (current ? '\n' : '') + line
+    }
+  }
+
+  // Don't forget the last paragraph
+  if (current.trim()) {
+    paragraphs.push(current.trim())
+  }
+
+  return paragraphs
+}
+
+/**
  * Split output by newline into text + image nodes
  * 按换行拆分为文本节点 + 图片配置节点
  */
 const handleSplitToTextWithImage = () => {
   if (!outputContent.value) return
-
-  // Split by newline, filter empty
-  const segments = outputContent.value
-    .split(/\n+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 0)
+  // Split by paragraphs (continuous non-empty lines as one segment)
+  const segments = parseParagraphs(outputContent.value)
 
   if (segments.length === 0) {
     window.$message?.warning('内容为空，无法拆分')
@@ -409,23 +436,12 @@ const handleSplitToTextWithImage = () => {
 const handleSplitToTextOnly = () => {
   if (!outputContent.value) return
 
-  // Split by double newline or single newline, filter empty
-  const segments = outputContent.value
-    .split(/\n\n+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 0)
+  // Split by paragraphs (continuous non-empty lines as one segment)
+  const segments = parseParagraphs(outputContent.value)
 
   if (segments.length <= 1) {
-    // Try single newline split
-    const singleLines = outputContent.value
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0)
-    if (singleLines.length <= 1) {
-      window.$message?.warning('内容无法拆分（只有一行或内容为空）')
-      return
-    }
-    return doSplitToTextNodes(singleLines)
+    window.$message?.warning('内容无法拆分（只有一段或内容为空）')
+    return
   }
 
   doSplitToTextNodes(segments)
