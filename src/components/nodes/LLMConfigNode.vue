@@ -98,22 +98,22 @@
           <!-- Split actions | 拆分操作 -->
           <div class="mt-2 flex gap-2">
             <button
-              @click="handleSplitToPictureBookPages"
+              @click="handleSplitToTextWithImage"
               :disabled="isSplitting"
               class="flex-1 px-3 py-1.5 text-xs rounded-lg border border-purple-400 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
             >
               <n-spin v-if="isSplitting" :size="12" />
-              <n-icon v-else :size="12"><GridOutline /></n-icon>
-              {{ isSplitting ? '拆分中...' : '拆分为绘本页' }}
+              <n-icon v-else :size="12"><ImageOutline /></n-icon>
+              {{ isSplitting ? '拆分中...' : '拆分图文' }}
             </button>
             <button
-              @click="handleSplitToCharacterImages"
+              @click="handleSplitToTextOnly"
               :disabled="isSplitting"
               class="flex-1 px-3 py-1.5 text-xs rounded-lg border border-purple-400 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
             >
               <n-spin v-if="isSplitting" :size="12" />
-              <n-icon v-else :size="12"><PeopleOutline /></n-icon>
-              {{ isSplitting ? '拆分中...' : '拆分为角色图' }}
+              <n-icon v-else :size="12"><ListOutline /></n-icon>
+              {{ isSplitting ? '拆分中...' : '拆分文本' }}
             </button>
           </div>
           <div v-if="splitMessage" class="mt-1 text-xs text-green-600 dark:text-green-400">{{ splitMessage }}</div>
@@ -135,8 +135,8 @@
 import { ref, watch, computed } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin, NSelect } from 'naive-ui'
-import { TrashOutline, CopyOutline, ChatbubbleOutline, SparklesOutline, GridOutline, PeopleOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode, addNodes, addEdges, nodes, edges, startBatchOperation, endBatchOperation } from '../../stores/canvas'
+import { TrashOutline, CopyOutline, ChatbubbleOutline, SparklesOutline, ListOutline, ImageOutline } from '@vicons/ionicons5'
+import { updateNode, removeNode, duplicateNode, addNodes, addEdges, nodes, startBatchOperation, endBatchOperation } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useChat, useApiConfig } from '../../hooks'
 
@@ -297,227 +297,20 @@ const handleCopyOutput = async () => {
 }
 
 /**
- * Find character reference image node from sibling workflow nodes
- * 从工作流中查找角色参考图节点
+ * Split output by newline into text + image nodes
+ * 按换行拆分为文本节点 + 图片配置节点
  */
-const findCharacterReferenceImage = () => {
-  // Strategy: find image nodes that have labels like '角色参考图', '主角参考图', '角色图结果' with a valid url
-  const imageNodes = nodes.value.filter(n => 
-    n.type === 'image' && 
-    n.data?.url && 
-    n.data.url !== '' &&
-    (n.data?.label?.includes('角色') || n.data?.label?.includes('参考图'))
-  )
-  if (imageNodes.length > 0) return imageNodes[0]
-
-  // Fallback: find any image node connected to an imageConfig with '角色' or '参考' label
-  const charConfigs = nodes.value.filter(n => 
-    n.type === 'imageConfig' && 
-    (n.data?.label?.includes('角色') || n.data?.label?.includes('参考'))
-  )
-  for (const config of charConfigs) {
-    const outEdges = edges.value.filter(e => e.source === config.id)
-    for (const edge of outEdges) {
-      const target = nodes.value.find(n => n.id === edge.target && n.type === 'image' && n.data?.url)
-      if (target) return target
-    }
-  }
-
-  return null
-}
-
-/**
- * Parse picture book pages from LLM output
- * 解析 LLM 输出的绘本页面
- * Supports formats:
- *   第N页：[故事配文] | [插画描述]
- *   第N页：[故事配文] | [插画描述]
- */
-const parsePictureBookPages = (text) => {
-  const pages = []
-  const lines = text.split('\n').filter(l => l.trim())
-
-  for (const line of lines) {
-    // Match: 第N页： or 第N页: followed by content
-    const pageMatch = line.match(/第\s*(\d+)\s*页[\uff1a:](.*)/)
-    if (pageMatch) {
-      const pageNum = parseInt(pageMatch[1])
-      const rest = pageMatch[2].trim()
-
-      // Split by | separator
-      const parts = rest.split('|').map(s => s.trim())
-      const storyText = parts[0] || ''
-      const illustrationPrompt = parts.slice(1).join('|').trim() || storyText
-
-      pages.push({
-        pageNumber: pageNum,
-        storyText,
-        illustrationPrompt
-      })
-    }
-  }
-
-  return pages
-}
-
-/**
- * Parse character designs from LLM output
- * 解析 LLM 输出的角色设计
- * Supports formats:
- *   角色名
- *   角色提示词
- *   ---
- *   角色名2
- *   角色提示词2
- *   ---
- */
-const parseCharacterDesigns = (text) => {
-  const characters = []
-  // Split by "---" separator
-  const blocks = text.split(/---+/).map(b => b.trim()).filter(b => b)
-
-  for (const block of blocks) {
-    const lines = block.split('\n').map(l => l.trim()).filter(l => l)
-    if (lines.length >= 2) {
-      // First line is character name, rest is the prompt
-      const charName = lines[0]
-      const charPrompt = lines.slice(1).join(' ')
-
-      characters.push({
-        name: charName,
-        prompt: charPrompt
-      })
-    } else if (lines.length === 1) {
-      // Only one line, treat as prompt without name
-      characters.push({
-        name: `角色${characters.length + 1}`,
-        prompt: lines[0]
-      })
-    }
-  }
-
-  return characters
-}
-
-/**
- * Split output into picture book page nodes
- * 拆分输出为绘本页节点（故事文字 + 插画描述 + imageConfig + 角色参考图连接）
- */
-const handleSplitToPictureBookPages = () => {
+const handleSplitToTextWithImage = () => {
   if (!outputContent.value) return
 
-  const pages = parsePictureBookPages(outputContent.value)
-  if (pages.length === 0) {
-    window.$message?.warning('无法解析绘本页面，请检查 LLM 输出格式（期望“第N页：[文字] | [插画描述]”）')
-    return
-  }
+  // Split by newline, filter empty
+  const segments = outputContent.value
+    .split(/\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
 
-  isSplitting.value = true
-  splitMessage.value = ''
-
-  try {
-    // Find character reference image
-    const charImageNode = findCharacterReferenceImage()
-
-    // Get current node position
-    const currentNode = nodes.value.find(n => n.id === props.id)
-    const baseX = (currentNode?.position?.x || 0) + 450
-    const baseY = (currentNode?.position?.y || 0) - 100
-    const rowSpacing = 240
-    const colSpacing = 420
-
-    // Start batch operation manually | 手动开始批量操作
-    startBatchOperation()
-
-    // Prepare node specs for batch creation | 准备批量创建的节点规格
-    const nodeSpecs = []
-    const edgeSpecs = []
-
-    for (const page of pages) {
-      const pageY = baseY + (page.pageNumber - 1) * rowSpacing
-
-      // Create illustration prompt node spec | 创建插画描述节点规格
-      const illustrationSpec = {
-        type: 'text',
-        position: { x: baseX, y: pageY },
-        data: {
-          content: page.illustrationPrompt,
-          label: `第${page.pageNumber}页 插画描述`
-        }
-      }
-      nodeSpecs.push(illustrationSpec)
-
-      // Create imageConfig node spec | 创建图片配置节点规格
-      const imageConfigSpec = {
-        type: 'imageConfig',
-        position: { x: baseX + colSpacing, y: pageY },
-        data: {
-          label: `绘本第${page.pageNumber}页`,
-          model: 'doubao-seedream-4-5-251128',
-          size: '2048x2048'
-        }
-      }
-      nodeSpecs.push(imageConfigSpec)
-    }
-
-    // Batch create nodes (autoBatch=false) | 批量创建节点（autoBatch=false）
-    const createdIds = addNodes(nodeSpecs, false)
-
-    // Create edge specs | 创建边规格
-    for (let i = 0; i < pages.length; i++) {
-      const illustrationId = createdIds[i * 2]
-      const imageConfigId = createdIds[i * 2 + 1]
-
-      // Connect illustration prompt → imageConfig
-      edgeSpecs.push({
-        source: illustrationId,
-        target: imageConfigId,
-        type: 'promptOrder',
-        data: { promptOrder: 1 },
-        sourceHandle: 'right',
-        targetHandle: 'left'
-      })
-
-      // Connect character reference image → imageConfig (if found)
-      if (charImageNode) {
-        edgeSpecs.push({
-          source: charImageNode.id,
-          target: imageConfigId,
-          type: 'imageOrder',
-          data: { imageOrder: 1 },
-          sourceHandle: 'right',
-          targetHandle: 'left'
-        })
-      }
-    }
-
-    // Batch create edges (autoBatch=false) | 批量创建边（autoBatch=false）
-    addEdges(edgeSpecs, false)
-
-    // End batch operation and save to history | 结束批量操作并保存到历史
-    endBatchOperation()
-
-    const createdCount = pages.length
-    const charMsg = charImageNode ? '，已关联角色参考图' : '，未找到角色参考图（请手动连接）'
-    splitMessage.value = `已拆分 ${createdCount} 页${charMsg}`
-    window.$message?.success(`已拆分为 ${createdCount} 个绘本页${charMsg}`)
-  } catch (err) {
-    window.$message?.error(`拆分失败: ${err.message}`)
-  } finally {
-    isSplitting.value = false
-  }
-}
-
-/**
- * Split output into character image nodes
- * 拆分输出为角色图节点（角色名 + imageConfig）
- */
-const handleSplitToCharacterImages = () => {
-  if (!outputContent.value) return
-
-  const characters = parseCharacterDesigns(outputContent.value)
-  if (characters.length === 0) {
-    window.$message?.warning('无法解析角色设计，请检查 LLM 输出格式（使用"---"分隔每个角色）')
+  if (segments.length === 0) {
+    window.$message?.warning('内容为空，无法拆分')
     return
   }
 
@@ -539,27 +332,27 @@ const handleSplitToCharacterImages = () => {
     const nodeSpecs = []
     const edgeSpecs = []
 
-    for (let i = 0; i < characters.length; i++) {
-      const char = characters[i]
-      const charY = baseY + i * rowSpacing
+    for (let i = 0; i < segments.length; i++) {
+      const content = segments[i]
+      const segY = baseY + i * rowSpacing
 
-      // Create text node for character prompt
-      const promptSpec = {
+      // Create text node
+      const textSpec = {
         type: 'text',
-        position: { x: baseX, y: charY },
+        position: { x: baseX, y: segY },
         data: {
-          content: char.prompt,
-          label: char.name
+          content: content,
+          label: `片段 ${i + 1}`
         }
       }
-      nodeSpecs.push(promptSpec)
+      nodeSpecs.push(textSpec)
 
-      // Create imageConfig node for character
+      // Create imageConfig node
       const imageConfigSpec = {
         type: 'imageConfig',
-        position: { x: baseX + colSpacing, y: charY },
+        position: { x: baseX + colSpacing, y: segY },
         data: {
-          label: `${char.name}参考图`,
+          label: `图片 ${i + 1}`,
           model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
@@ -571,24 +364,24 @@ const handleSplitToCharacterImages = () => {
     const createdIds = addNodes(nodeSpecs, false)
 
     // Create edges
-    for (let i = 0; i < characters.length; i++) {
-      const promptId = createdIds[i * 2]
+    for (let i = 0; i < segments.length; i++) {
+      const textId = createdIds[i * 2]
       const imageConfigId = createdIds[i * 2 + 1]
 
-      // Connect prompt → imageConfig
+      // Connect LLM → text
       edgeSpecs.push({
-        source: promptId,
-        target: imageConfigId,
-        type: 'promptOrder',
-        data: { promptOrder: 1 },
+        source: props.id,
+        target: textId,
         sourceHandle: 'right',
         targetHandle: 'left'
       })
 
-      // Connect from LLM node to prompt
+      // Connect text → imageConfig
       edgeSpecs.push({
-        source: props.id,
-        target: promptId,
+        source: textId,
+        target: imageConfigId,
+        type: 'promptOrder',
+        data: { promptOrder: 1 },
         sourceHandle: 'right',
         targetHandle: 'left'
       })
@@ -600,14 +393,93 @@ const handleSplitToCharacterImages = () => {
     // End batch operation
     endBatchOperation()
 
-    splitMessage.value = `已拆分 ${characters.length} 个角色`
-    window.$message?.success(`已拆分为 ${characters.length} 个角色图节点`)
+    splitMessage.value = `已拆分 ${segments.length} 个图文节点`
+    window.$message?.success(`已拆分为 ${segments.length} 个图文节点`)
   } catch (err) {
     window.$message?.error(`拆分失败: ${err.message}`)
   } finally {
     isSplitting.value = false
   }
 }
+
+/**
+ * Split output by newlines into individual text nodes
+ * 按换行拆分为多个文本节点
+ */
+const handleSplitToTextOnly = () => {
+  if (!outputContent.value) return
+
+  // Split by double newline or single newline, filter empty
+  const segments = outputContent.value
+    .split(/\n\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+
+  if (segments.length <= 1) {
+    // Try single newline split
+    const singleLines = outputContent.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+    if (singleLines.length <= 1) {
+      window.$message?.warning('内容无法拆分（只有一行或内容为空）')
+      return
+    }
+    return doSplitToTextNodes(singleLines)
+  }
+
+  doSplitToTextNodes(segments)
+}
+
+const doSplitToTextNodes = (segments) => {
+  isSplitting.value = true
+  splitMessage.value = ''
+
+  try {
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const baseX = (currentNode?.position?.x || 0) + 450
+    const baseY = (currentNode?.position?.y || 0)
+    const rowSpacing = 180
+
+    // Start batch operation manually
+    startBatchOperation()
+
+    // Prepare node specs for batch creation
+    const nodeSpecs = segments.map((content, index) => ({
+      type: 'text',
+      position: { x: baseX, y: baseY + index * rowSpacing },
+      data: {
+        content: content,
+        label: `拆分片段 ${index + 1}`
+      }
+    }))
+
+    // Batch create nodes
+    const createdIds = addNodes(nodeSpecs, false)
+
+    // Prepare edge specs for batch creation
+    const edgeSpecs = createdIds.map(nodeId => ({
+      source: props.id,
+      target: nodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left'
+    }))
+
+    // Batch create edges
+    addEdges(edgeSpecs, false)
+
+    // End batch operation
+    endBatchOperation()
+
+    splitMessage.value = `已拆分为 ${segments.length} 个文本节点`
+    window.$message?.success(`已拆分为 ${segments.length} 个文本节点`)
+  } catch (err) {
+    window.$message?.error(`拆分失败: ${err.message}`)
+  } finally {
+    isSplitting.value = false
+  }
+}
+
 </script>
 
 <style scoped>
