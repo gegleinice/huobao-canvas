@@ -1,6 +1,6 @@
 <template>
-  <!-- Image config node wrapper for hover area | 文生图配置节点包裹层，扩展悬浮区域 -->
-  <div class="image-config-node-wrapper" @mouseenter="showActions = true" @mouseleave="showActions = false">
+  <!-- Image config node wrapper | 文生图配置节点包裹层 -->
+  <div class="image-config-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Image config node | 文生图配置节点 -->
     <div
       class="image-config-node bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
@@ -9,7 +9,12 @@
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
         <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label }}</span>
         <div class="flex items-center gap-1">
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+            <n-icon :size="14">
+              <CopyOutline />
+            </n-icon>
+          </button>
+          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -135,21 +140,9 @@
 
       <!-- Handles | 连接点 -->
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" :visible="showHandleMenu" />
     </div>
 
-    <!-- Hover action buttons | 悬浮操作按钮 -->
-    <!-- Top right - Copy button | 右上角 - 复制按钮 -->
-    <div v-show="showActions" class="absolute -top-5 right-0 z-[1000]">
-      <button @click="handleDuplicate"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5">
-        <n-icon :size="16" class="text-gray-600">
-          <CopyOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-      </button>
-    </div>
   </div>
 </template>
 
@@ -164,6 +157,7 @@ import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline } from '@vicons/ionicons5'
 import { useImageGeneration, useApiConfig } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
+import NodeHandleMenu from './NodeHandleMenu.vue'
 import { imageModelOptions, getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
 
 const props = defineProps({
@@ -180,10 +174,8 @@ const { isConfigured } = useApiConfig()
 // Image generation hook | 图片生成 hook
 const { loading, error, images: generatedImages, generate } = useImageGeneration()
 
-// Hover state | 悬浮状态
-const showActions = ref(false)
-
 // Local state | 本地状态
+const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
@@ -256,6 +248,13 @@ const getConnectedInputs = () => {
       const content = sourceNode.data?.content || ''
       if (content) {
         // Get order from edge data, default to 1 | 从边数据获取顺序，默认为1
+        const order = edge.data?.promptOrder || 1
+        prompts.push({ order, content, nodeId: sourceNode.id })
+      }
+    } else if (sourceNode.type === 'llmConfig') {
+      // LLM node output as prompt | LLM 节点输出作为提示词
+      const content = sourceNode.data?.outputContent || ''
+      if (content) {
         const order = edge.data?.promptOrder || 1
         prompts.push({ order, content, nodeId: sourceNode.id })
       }

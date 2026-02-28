@@ -274,7 +274,7 @@ import {
   AppsOutline,
   ChatbubbleOutline
 } from '@vicons/ionicons5'
-import { nodes, edges, addNode, addEdge, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory } from '../stores/canvas'
+import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useApiConfig, useChat, useWorkflowOrchestrator } from '../hooks'
 import { projects, initProjectsStore, updateProject, renameProject, currentProject } from '../stores/projects'
@@ -422,7 +422,7 @@ const tools = [
 // Node type options for menu | 节点类型菜单选项
 const nodeTypeOptions = [
   { type: 'text', name: '文本节点', icon: TextOutline, color: '#3b82f6' },
-  // { type: 'llmConfig', name: 'LLM文本生成', icon: ChatbubbleOutline, color: '#a855f7' },
+  { type: 'llmConfig', name: 'LLM文本生成', icon: ChatbubbleOutline, color: '#a855f7' },
   { type: 'imageConfig', name: '文生图配置', icon: ColorPaletteOutline, color: '#22c55e' },
   { type: 'videoConfig', name: '视频生成配置', icon: VideocamOutline, color: '#f59e0b' },
   { type: 'image', name: '图片节点', icon: ImageOutline, color: '#8b5cf6' },
@@ -466,43 +466,52 @@ const handleAddWorkflow = ({ workflow, options }) => {
   // Calculate viewport center position | 计算视口中心位置
   const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
   const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
-  
+
   // Create nodes from workflow template | 从工作流模板创建节点
   const startPosition = { x: viewportCenterX - 300, y: viewportCenterY - 200 }
   const { nodes: newNodes, edges: newEdges } = workflow.createNodes(startPosition, options)
-  
-  // Add nodes to canvas | 将节点添加到画布
-  newNodes.forEach(node => {
-    const nodeId = addNode(node.type, node.position, node.data)
-    // Update the node ID in edges | 更新边中的节点ID
-    newEdges.forEach(edge => {
-      if (edge.source === node.id) edge.source = nodeId
-      if (edge.target === node.id) edge.target = nodeId
-    })
-    node.newId = nodeId
+
+  // Start batch operation manually | 手动开始批量操作
+  startBatchOperation()
+
+  // Add nodes to canvas in batch | 批量将节点添加到画布
+  const nodeSpecs = newNodes.map(node => ({
+    type: node.type,
+    position: node.position,
+    data: node.data
+  }))
+  const nodeIds = addNodes(nodeSpecs, false)
+
+  // Map old node IDs to new IDs | 映射旧节点ID到新ID
+  const idMap = {}
+  newNodes.forEach((node, index) => {
+    idMap[node.id] = nodeIds[index]
   })
-  
-  // Add edges to canvas | 将边添加到画布
+
+  // Add edges to canvas in batch | 批量将边添加到画布
+  const edgeSpecs = newEdges.map(edge => ({
+    source: idMap[edge.source] || edge.source,
+    target: idMap[edge.target] || edge.target,
+    sourceHandle: edge.sourceHandle || 'right',
+    targetHandle: edge.targetHandle || 'left',
+    type: edge.type,
+    data: edge.data
+  }))
+
+  // Add edges (autoBatch=false to use manual batch) | 添加边（autoBatch=false 以使用手动批量）
+  addEdges(edgeSpecs, false)
+
+  // End batch operation and save to history | 结束批量操作并保存到历史
+  endBatchOperation()
+
+  // Delay node internals update | 延迟节点内部更新
   setTimeout(() => {
-    newEdges.forEach(edge => {
-      addEdge({
-        source: edge.source,
-        target: edge.target,
-        sourceHandle: edge.sourceHandle || 'right',
-        targetHandle: edge.targetHandle || 'left',
-        type: edge.type,  // Preserve edge type (e.g., promptOrder) | 保留边类型
-        data: edge.data   // Preserve edge data (e.g., promptOrder number) | 保留边数据
-      })
-    })
-    
     // Update node internals | 更新节点内部
-    newNodes.forEach(node => {
-      if (node.newId) {
-        updateNodeInternals(node.newId)
-      }
+    nodeIds.forEach(nodeId => {
+      updateNodeInternals(nodeId)
     })
   }, 100)
-  
+
   window.$message?.success(`已添加工作流: ${workflow.name}`)
 }
 
@@ -545,12 +554,29 @@ const onConnect = (params) => {
       type: 'imageOrder',
       data: { imageOrder: nextOrder }
     })
+  } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'imageConfig') {
+    // LLM output as prompt for image generation | LLM 输出作为图片生成提示词
+    const existingTextEdges = edges.value.filter(e =>
+      e.target === params.target && e.type === 'promptOrder'
+    )
+    const nextOrder = existingTextEdges.length + 1
+
+    addEdge({
+      ...params,
+      type: 'promptOrder',
+      data: { promptOrder: nextOrder }
+    })
+  } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'videoConfig') {
+    // LLM output as prompt for video generation | LLM 输出作为视频生成提示词
+    addEdge({
+      ...params,
+      type: 'promptOrder',
+      data: { promptOrder: 1 }
+    })
   } else {
     addEdge(params)
   }
 }
-
-// Handle node click | 处理节点点击
 const onNodeClick = (event) => {
   // nodes.value.forEach(node => {
   //   updateNode(node.id, { selected: false })

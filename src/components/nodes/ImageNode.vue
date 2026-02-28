@@ -1,6 +1,6 @@
 <template>
   <!-- Image node wrapper for hover area | 图片节点包裹层，扩展悬浮区域 -->
-  <div class="image-node-wrapper" @mouseenter="showActions = true" @mouseleave="showActions = false">
+  <div class="image-node-wrapper" @mouseenter="showActions = true; showHandleMenu = true" @mouseleave="showActions = false; showHandleMenu = false">
     <!-- Image node | 图片节点 -->
     <div
       class="image-node bg-[var(--bg-secondary)] rounded-xl border min-w-[200px] max-w-[280px] relative transition-all duration-200"
@@ -10,16 +10,46 @@
         <div class="flex items-center justify-between">
           <span class="text-sm font-medium text-[var(--text-primary)]">{{ data.label || '图像生成结果' }}</span>
           <div class="flex items-center gap-1">
-            <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
-              <n-icon :size="14">
-                <TrashOutline />
-              </n-icon>
-            </button>
-            <!-- <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
-              <n-icon :size="14">
-                <ExpandOutline />
-              </n-icon>
-            </button> -->
+            <n-tooltip v-if="data.url" trigger="hover">
+              <template #trigger>
+                <button @click="handlePreview" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                  <n-icon :size="14">
+                    <EyeOutline />
+                  </n-icon>
+                </button>
+              </template>
+              预览
+            </n-tooltip>
+            <n-tooltip v-if="data.url" trigger="hover">
+              <template #trigger>
+                <button @click="handleDownload" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                  <n-icon :size="14">
+                    <DownloadOutline />
+                  </n-icon>
+                </button>
+              </template>
+              下载
+            </n-tooltip>
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                  <n-icon :size="14">
+                    <CopyOutline />
+                  </n-icon>
+                </button>
+              </template>
+              复制节点
+            </n-tooltip>
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                  <n-icon :size="14">
+                    <TrashOutline />
+                  </n-icon>
+                </button>
+              </template>
+              删除节点
+            </n-tooltip>
           </div>
         </div>
         <!-- Model name | 模型名称 -->
@@ -186,73 +216,8 @@
       </div>
 
       <!-- Handles | 连接点 -->
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+      <NodeHandleMenu :nodeId="id" nodeType="image" :visible="showHandleMenu" />
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-    </div>
-
-    <!-- Hover action buttons | 悬浮操作按钮 -->
-    <!-- Top right - Copy button | 右上角 - 复制按钮 -->
-    <div v-show="showActions" class="absolute -top-5 right-12 z-[1000]">
-      <button @click="handleDuplicate"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5  w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <CopyOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-      </button>
-    </div>
-
-    <!-- Right side - Action buttons | 右侧 - 操作按钮 -->
-    <div v-show="showActions && data.url"
-      class="absolute right-10 top-1/2 -translate-y-1/2 translate-x-full flex flex-col gap-2 z-[1000]">
-      <!-- Inpaint button | 涂抹重绘按钮 -->
-      <!-- <button @click="toggleInpaintMode"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max"
-        :class="{ 'border-purple-400 bg-purple-50': isInpaintMode }">
-        <n-icon :size="16" :class="isInpaintMode ? 'text-purple-500' : 'text-gray-600'">
-          <BrushOutline />
-        </n-icon>
-        <span
-          class="text-xs max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap"
-          :class="isInpaintMode ? 'text-purple-500' : 'text-gray-600'">局部重绘</span>
-      </button> -->
-      <!-- Image generation button | 图片生图按钮 -->
-      <button @click="handleImageGen"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5  w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <ImageOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">图片生图</span>
-      </button>
-      <!-- Preview button | 预览按钮 -->
-      <button @click="handlePreview"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <EyeOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">预览</span>
-      </button>
-      <!-- Download button | 下载按钮 -->
-      <button @click="handleDownload"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5  w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <DownloadOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">下载</span>
-      </button>
-      <!-- Video generation button | 视频生成按钮 -->
-      <button @click="handleVideoGen"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5  w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <VideocamOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">视频生成</span>
-      </button>
     </div>
   </div>
 </template>
@@ -264,9 +229,10 @@
  */
 import { ref, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { NIcon } from 'naive-ui'
+import { NIcon, NTooltip } from 'naive-ui'
 import { TrashOutline, ExpandOutline, ImageOutline, CloseCircleOutline, CopyOutline, VideocamOutline, DownloadOutline, EyeOutline, BrushOutline, RefreshOutline, ColorWandOutline } from '@vicons/ionicons5'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
+import NodeHandleMenu from './NodeHandleMenu.vue'
 
 const props = defineProps({
   id: String,
@@ -278,6 +244,7 @@ const { updateNodeInternals } = useVueFlow()
 
 // Hover state | 悬浮状态
 const showActions = ref(true)
+const showHandleMenu = ref(false)
 
 // URL input state | URL 输入状态
 const urlInput = ref('')

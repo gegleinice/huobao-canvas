@@ -1,6 +1,6 @@
 <template>
   <!-- Video config node wrapper | 视频配置节点包裹层 -->
-  <div class="video-config-node-wrapper relative" @mouseenter="showActions = true" @mouseleave="showActions = false">
+  <div class="video-config-node-wrapper relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Video config node | 视频配置节点 -->
     <div class="video-config-node bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
@@ -8,7 +8,12 @@
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
         <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label || '视频生成' }}</span>
         <div class="flex items-center gap-1">
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+            <n-icon :size="14">
+              <CopyOutline />
+            </n-icon>
+          </button>
+          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -113,21 +118,9 @@
 
       <!-- Handles | 连接点 -->
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" :visible="showHandleMenu" :operations="[]" />
     </div>
 
-    <!-- Hover action buttons | 悬浮操作按钮 -->
-    <!-- Top right - Copy button | 右上角 - 复制按钮 -->
-    <div v-show="showActions" class="absolute -top-5 right-0 z-[1000]">
-      <button @click="handleDuplicate"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <CopyOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-      </button>
-    </div>
   </div>
 </template>
 
@@ -142,6 +135,7 @@ import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline } from '@vicons/ionicons5'
 import { useVideoGeneration, useApiConfig } from '../../hooks'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
+import NodeHandleMenu from './NodeHandleMenu.vue'
 import { videoModelOptions, getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
 
 const props = defineProps({
@@ -158,10 +152,8 @@ const { isConfigured } = useApiConfig()
 // Video generation hook | 视频生成 hook
 const { loading, error, status, video: generatedVideo, progress, generate } = useVideoGeneration()
 
-// Hover state | 悬浮状态
-const showActions = ref(false)
-
 // Local state | 本地状态
+const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
 const localDuration = ref(props.data?.dur || 5)
@@ -277,6 +269,10 @@ const getConnectedInputs = () => {
 
     if (sourceNode.type === 'text') {
       prompt = sourceNode.data?.content || ''
+    } else if (sourceNode.type === 'llmConfig') {
+      // LLM node output as prompt | LLM 节点输出作为提示词
+      const content = sourceNode.data?.outputContent || ''
+      if (content) prompt = content
     } else if (sourceNode.type === 'image' && sourceNode.data?.url) {
       const imageData = sourceNode.data.base64 || sourceNode.data.url
       const role = edge.data?.imageRole || 'first_frame_image'

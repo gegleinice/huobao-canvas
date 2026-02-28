@@ -33,31 +33,136 @@ const historyIndex = ref(-1)
 const MAX_HISTORY = 50
 let isRestoring = false
 
+// Position change threshold for history | 位置变化阈值
+const POSITION_THRESHOLD = 10
+
+// Batch operation tracking | 批量操作跟踪
+let isBatchOperation = false
+let batchStartState = null
+
 /**
  * Save current state to history | 保存当前状态到历史
+ * @param {boolean} force - Force save even if batch operation | 强制保存，即使在批量操作中
  */
-const saveToHistory = () => {
+const saveToHistory = (force = false) => {
   if (isRestoring) return
-  
+
+  // If in batch operation and not forced, don't save | 如果在批量操作中且未强制保存，则不保存
+  if (isBatchOperation && !force) return
+
   const state = {
     nodes: JSON.parse(JSON.stringify(nodes.value)),
     edges: JSON.parse(JSON.stringify(edges.value))
   }
-  
+
   // Remove future history if we're not at the end | 如果不在末尾，删除未来历史
   if (historyIndex.value < history.value.length - 1) {
     history.value = history.value.slice(0, historyIndex.value + 1)
   }
-  
+
   // Add new state | 添加新状态
   history.value.push(state)
-  
+
   // Limit history size | 限制历史大小
   if (history.value.length > MAX_HISTORY) {
     history.value.shift()
   } else {
     historyIndex.value++
   }
+}
+
+/**
+ * Start batch operation | 开始批量操作
+ * Records the starting state for batch operations
+ */
+export const startBatchOperation = () => {
+  isBatchOperation = true
+  batchStartState = {
+    nodes: JSON.parse(JSON.stringify(nodes.value)),
+    edges: JSON.parse(JSON.stringify(edges.value))
+  }
+}
+
+/**
+ * End batch operation and save to history | 结束批量操作并保存到历史
+ * Compares with start state to decide if save is needed
+ */
+export const endBatchOperation = () => {
+  if (!isBatchOperation || !batchStartState) {
+    isBatchOperation = false
+    return
+  }
+
+  // Check if there are significant changes | 检查是否有显著变化
+  const hasSignificantChanges = checkSignificantChanges(batchStartState, {
+    nodes: nodes.value,
+    edges: edges.value
+  })
+
+  if (hasSignificantChanges) {
+    saveToHistory(true)
+  }
+
+  isBatchOperation = false
+  batchStartState = null
+}
+
+/**
+ * Check if changes are significant enough to save | 检查变化是否足够显著需要保存
+ * @param {object} oldState - Previous state | 之前的状态
+ * @param {object} newState - New state | 新状态
+ * @returns {boolean} - Whether changes should be saved | 是否应该保存变化
+ */
+const checkSignificantChanges = (oldState, newState) => {
+  const oldNodes = oldState.nodes || []
+  const newNodes = newState.nodes || []
+
+  // Check for added or removed nodes | 检查添加或删除的节点
+  if (oldNodes.length !== newNodes.length) {
+    return true
+  }
+
+  // Check for new nodes (by comparing IDs) | 检查新节点
+  const oldNodeIds = new Set(oldNodes.map(n => n.id))
+  const newNodeIds = new Set(newNodes.map(n => n.id))
+
+  // Nodes added | 添加的节点
+  for (const id of newNodeIds) {
+    if (!oldNodeIds.has(id)) {
+      return true
+    }
+  }
+
+  // Nodes removed | 删除的节点
+  for (const id of oldNodeIds) {
+    if (!newNodeIds.has(id)) {
+      return true
+    }
+  }
+
+  // Check position changes for existing nodes | 检查现有节点的位置变化
+  for (const newNode of newNodes) {
+    const oldNode = oldNodes.find(n => n.id === newNode.id)
+    if (oldNode) {
+      const dx = Math.abs(newNode.position.x - oldNode.position.x)
+      const dy = Math.abs(newNode.position.y - oldNode.position.y)
+
+      // If any node moved beyond threshold, save | 如果任何节点移动超过阈值，则保存
+      if (dx > POSITION_THRESHOLD || dy > POSITION_THRESHOLD) {
+        return true
+      }
+    }
+  }
+
+  // Check for edge changes | 检查边的变化
+  const oldEdges = oldState.edges || []
+  const newEdges = newState.edges || []
+
+  if (oldEdges.length !== newEdges.length) {
+    return true
+  }
+
+  return false
 }
 
 // Add a new node | 添加新节点
@@ -78,6 +183,50 @@ export const addNode = (type, position = { x: 100, y: 100 }, data = {}) => {
   nodes.value = [...nodes.value, newNode]
   saveToHistory() // Save after adding node | 添加节点后保存
   return id
+}
+
+/**
+ * Add multiple nodes in batch | 批量添加多个节点
+ * Uses batch operation to group all node additions into one history entry
+ * @param {Array} nodeSpecs - Array of node specs [{ type, position, data }, ...]
+ * @param {boolean} autoBatch - Whether to auto-manage batch operation (default: true)
+ * @returns {Array} - Array of created node IDs | 创建的节点ID数组
+ */
+export const addNodes = (nodeSpecs, autoBatch = true) => {
+  if (!nodeSpecs || nodeSpecs.length === 0) return []
+
+  // Start batch operation if auto | 如果自动管理则开始批量操作
+  if (autoBatch) {
+    startBatchOperation()
+  }
+
+  const ids = []
+  const now = Date.now()
+
+  nodeSpecs.forEach(spec => {
+    const { type, position = { x: 100, y: 100 }, data = {} } = spec
+    const id = getNodeId()
+    const newNode = {
+      id,
+      type,
+      position,
+      data: {
+        ...getDefaultNodeData(type),
+        ...data,
+        createdAt: data.createdAt || now,
+        updatedAt: data.updatedAt || now
+      }
+    }
+    nodes.value = [...nodes.value, newNode]
+    ids.push(id)
+  })
+
+  // End batch operation if auto | 如果自动管理则结束批量操作并保存到历史
+  if (autoBatch) {
+    endBatchOperation()
+  }
+
+  return ids
 }
 
 // Get default data for node type | 获取节点类型的默认数据
@@ -179,6 +328,40 @@ export const addEdge = (params) => {
   }
   edges.value = [...edges.value, newEdge]
   saveToHistory() // Save after adding edge | 添加连线后保存
+}
+
+/**
+ * Add multiple edges in batch | 批量添加多条边
+ * Uses batch operation to group all edge additions into one history entry
+ * @param {Array} edgeSpecs - Array of edge specs [{ source, target, sourceHandle, targetHandle, type, data }, ...]
+ * @param {boolean} autoBatch - Whether to auto-manage batch operation (default: true)
+ * @returns {Array} - Array of created edge IDs | 创建的边ID数组
+ */
+export const addEdges = (edgeSpecs, autoBatch = true) => {
+  if (!edgeSpecs || edgeSpecs.length === 0) return []
+
+  // Start batch operation if auto | 如果自动管理则开始批量操作
+  if (autoBatch) {
+    startBatchOperation()
+  }
+
+  const ids = []
+
+  edgeSpecs.forEach(params => {
+    const newEdge = {
+      id: `edge_${params.source}_${params.target}`,
+      ...params
+    }
+    edges.value = [...edges.value, newEdge]
+    ids.push(newEdge.id)
+  })
+
+  // End batch operation if auto | 如果自动管理则结束批量操作并保存到历史
+  if (autoBatch) {
+    endBatchOperation()
+  }
+
+  return ids
 }
 
 // Update edge data | 更新边数据

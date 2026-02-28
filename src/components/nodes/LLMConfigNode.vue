@@ -1,6 +1,6 @@
 <template>
   <!-- LLM Config node wrapper | LLM配置节点包裹层 -->
-  <div class="llm-node-wrapper" @mouseenter="showActions = true" @mouseleave="showActions = false">
+  <div class="llm-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- LLM Config node | LLM配置节点 -->
     <div
       class="llm-node bg-[var(--bg-secondary)] rounded-xl border min-w-[320px] max-w-[400px] relative transition-all duration-200"
@@ -14,7 +14,12 @@
           <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label || 'LLM 文本生成' }}</span>
         </div>
         <div class="flex items-center gap-1">
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+            <n-icon :size="14">
+              <CopyOutline />
+            </n-icon>
+          </button>
+          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -89,23 +94,34 @@
           >
             <pre class="whitespace-pre-wrap">{{ outputContent }}</pre>
           </div>
+
+          <!-- Split actions | 拆分操作 -->
+          <div class="mt-2 flex gap-2">
+            <button
+              @click="handleSplitToPictureBookPages"
+              :disabled="isSplitting"
+              class="flex-1 px-3 py-1.5 text-xs rounded-lg border border-purple-400 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+            >
+              <n-spin v-if="isSplitting" :size="12" />
+              <n-icon v-else :size="12"><GridOutline /></n-icon>
+              {{ isSplitting ? '拆分中...' : '拆分为绘本页' }}
+            </button>
+            <button
+              @click="handleSplitToTextNodes"
+              :disabled="isSplitting"
+              class="flex-1 px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-purple-400 hover:text-purple-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+            >
+              <n-icon :size="12"><ListOutline /></n-icon>
+              按行拆分文本
+            </button>
+          </div>
+          <div v-if="splitMessage" class="mt-1 text-xs text-green-600 dark:text-green-400">{{ splitMessage }}</div>
         </div>
       </div>
 
       <!-- Handles | 连接点 -->
       <Handle type="target" :position="Position.Left" id="left" class="!bg-purple-500" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-purple-500" />
-    </div>
-
-    <!-- Hover action buttons | 悬浮操作按钮 -->
-    <div v-show="showActions" class="absolute -top-5 right-12 z-[1000]">
-      <button @click="handleDuplicate"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <CopyOutline />
-        </n-icon>
-        <span class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-      </button>
+      <NodeHandleMenu :nodeId="id" nodeType="llmConfig" dotColor="#a855f7" :visible="showHandleMenu" />
     </div>
   </div>
 </template>
@@ -118,8 +134,9 @@
 import { ref, watch, computed } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin, NSelect } from 'naive-ui'
-import { TrashOutline, CopyOutline, ChatbubbleOutline, SparklesOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode, nodes, edges } from '../../stores/canvas'
+import { TrashOutline, CopyOutline, ChatbubbleOutline, SparklesOutline, GridOutline, ListOutline } from '@vicons/ionicons5'
+import { updateNode, removeNode, duplicateNode, addNodes, addEdges, nodes, edges, startBatchOperation, endBatchOperation } from '../../stores/canvas'
+import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useChat, useApiConfig } from '../../hooks'
 
 const props = defineProps({
@@ -134,12 +151,14 @@ const { updateNodeInternals } = useVueFlow()
 const { isConfigured: isApiConfigured } = useApiConfig()
 
 // Local state | 本地状态
+const showHandleMenu = ref(false)
 const systemPrompt = ref(props.data?.systemPrompt || '')
 const model = ref(props.data?.model || 'gpt-4o-mini')
 const outputFormat = ref(props.data?.outputFormat || 'text')
 const outputContent = ref(props.data?.outputContent || '')
 const isGenerating = ref(false)
-const showActions = ref(false)
+const isSplitting = ref(false)
+const splitMessage = ref('')
 
 // Model options | 模型选项
 const modelOptions = [
@@ -226,15 +245,28 @@ const handleGenerate = async () => {
     
     if (result) {
       outputContent.value = result
-      updateNode(props.id, { outputContent: result })
+      updateNode(props.id, { outputContent: result, executed: true })
       window.$message?.success('生成完成')
     }
   } catch (err) {
+    updateNode(props.id, { error: err.message || '生成失败' })
     window.$message?.error(err.message || '生成失败')
   } finally {
     isGenerating.value = false
   }
 }
+
+// Watch for auto-execute flag | 监听自动执行标志
+watch(
+  () => props.data?.autoExecute,
+  (shouldExecute) => {
+    if (shouldExecute && !isGenerating.value) {
+      updateNode(props.id, { autoExecute: false })
+      setTimeout(() => handleGenerate(), 100)
+    }
+  },
+  { immediate: true }
+)
 
 // Handle delete | 处理删除
 const handleDelete = () => {
@@ -260,6 +292,257 @@ const handleCopyOutput = async () => {
     window.$message?.success('已复制到剪贴板')
   } catch (err) {
     window.$message?.error('复制失败')
+  }
+}
+
+/**
+ * Find character reference image node from sibling workflow nodes
+ * 从工作流中查找角色参考图节点
+ */
+const findCharacterReferenceImage = () => {
+  // Strategy: find image nodes that have labels like '角色参考图', '主角参考图', '角色图结果' with a valid url
+  const imageNodes = nodes.value.filter(n => 
+    n.type === 'image' && 
+    n.data?.url && 
+    n.data.url !== '' &&
+    (n.data?.label?.includes('角色') || n.data?.label?.includes('参考图'))
+  )
+  if (imageNodes.length > 0) return imageNodes[0]
+
+  // Fallback: find any image node connected to an imageConfig with '角色' or '参考' label
+  const charConfigs = nodes.value.filter(n => 
+    n.type === 'imageConfig' && 
+    (n.data?.label?.includes('角色') || n.data?.label?.includes('参考'))
+  )
+  for (const config of charConfigs) {
+    const outEdges = edges.value.filter(e => e.source === config.id)
+    for (const edge of outEdges) {
+      const target = nodes.value.find(n => n.id === edge.target && n.type === 'image' && n.data?.url)
+      if (target) return target
+    }
+  }
+
+  return null
+}
+
+/**
+ * Parse picture book pages from LLM output
+ * 解析 LLM 输出的绘本页面
+ * Supports formats:
+ *   第N页：[故事配文] | [插画描述]
+ *   第N页：[故事配文] | [插画描述]
+ */
+const parsePictureBookPages = (text) => {
+  const pages = []
+  const lines = text.split('\n').filter(l => l.trim())
+
+  for (const line of lines) {
+    // Match: 第N页： or 第N页: followed by content
+    const pageMatch = line.match(/第\s*(\d+)\s*页[\uff1a:](.*)/)
+    if (pageMatch) {
+      const pageNum = parseInt(pageMatch[1])
+      const rest = pageMatch[2].trim()
+
+      // Split by | separator
+      const parts = rest.split('|').map(s => s.trim())
+      const storyText = parts[0] || ''
+      const illustrationPrompt = parts.slice(1).join('|').trim() || storyText
+
+      pages.push({
+        pageNumber: pageNum,
+        storyText,
+        illustrationPrompt
+      })
+    }
+  }
+
+  return pages
+}
+
+/**
+ * Split output into picture book page nodes
+ * 拆分输出为绘本页节点（故事文字 + 插画描述 + imageConfig + 角色参考图连接）
+ */
+const handleSplitToPictureBookPages = () => {
+  if (!outputContent.value) return
+
+  const pages = parsePictureBookPages(outputContent.value)
+  if (pages.length === 0) {
+    window.$message?.warning('无法解析绘本页面，请检查 LLM 输出格式（期望“第N页：[文字] | [插画描述]”）')
+    return
+  }
+
+  isSplitting.value = true
+  splitMessage.value = ''
+
+  try {
+    // Find character reference image
+    const charImageNode = findCharacterReferenceImage()
+
+    // Get current node position
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const baseX = (currentNode?.position?.x || 0) + 450
+    const baseY = (currentNode?.position?.y || 0) - 100
+    const rowSpacing = 240
+    const colSpacing = 420
+
+    // Start batch operation manually | 手动开始批量操作
+    startBatchOperation()
+
+    // Prepare node specs for batch creation | 准备批量创建的节点规格
+    const nodeSpecs = []
+    const edgeSpecs = []
+
+    for (const page of pages) {
+      const pageY = baseY + (page.pageNumber - 1) * rowSpacing
+
+      // Create illustration prompt node spec | 创建插画描述节点规格
+      const illustrationSpec = {
+        type: 'text',
+        position: { x: baseX, y: pageY },
+        data: {
+          content: page.illustrationPrompt,
+          label: `第${page.pageNumber}页 插画描述`
+        }
+      }
+      nodeSpecs.push(illustrationSpec)
+
+      // Create imageConfig node spec | 创建图片配置节点规格
+      const imageConfigSpec = {
+        type: 'imageConfig',
+        position: { x: baseX + colSpacing, y: pageY },
+        data: {
+          label: `绘本第${page.pageNumber}页`,
+          model: 'doubao-seedream-4-5-251128',
+          size: '2048x2048'
+        }
+      }
+      nodeSpecs.push(imageConfigSpec)
+    }
+
+    // Batch create nodes (autoBatch=false) | 批量创建节点（autoBatch=false）
+    const createdIds = addNodes(nodeSpecs, false)
+
+    // Create edge specs | 创建边规格
+    for (let i = 0; i < pages.length; i++) {
+      const illustrationId = createdIds[i * 2]
+      const imageConfigId = createdIds[i * 2 + 1]
+
+      // Connect illustration prompt → imageConfig
+      edgeSpecs.push({
+        source: illustrationId,
+        target: imageConfigId,
+        type: 'promptOrder',
+        data: { promptOrder: 1 },
+        sourceHandle: 'right',
+        targetHandle: 'left'
+      })
+
+      // Connect character reference image → imageConfig (if found)
+      if (charImageNode) {
+        edgeSpecs.push({
+          source: charImageNode.id,
+          target: imageConfigId,
+          type: 'imageOrder',
+          data: { imageOrder: 1 },
+          sourceHandle: 'right',
+          targetHandle: 'left'
+        })
+      }
+    }
+
+    // Batch create edges (autoBatch=false) | 批量创建边（autoBatch=false）
+    addEdges(edgeSpecs, false)
+
+    // End batch operation and save to history | 结束批量操作并保存到历史
+    endBatchOperation()
+
+    const createdCount = pages.length
+    const charMsg = charImageNode ? '，已关联角色参考图' : '，未找到角色参考图（请手动连接）'
+    splitMessage.value = `已拆分 ${createdCount} 页${charMsg}`
+    window.$message?.success(`已拆分为 ${createdCount} 个绘本页${charMsg}`)
+  } catch (err) {
+    window.$message?.error(`拆分失败: ${err.message}`)
+  } finally {
+    isSplitting.value = false
+  }
+}
+
+/**
+ * Split output by lines into individual text nodes
+ * 按行拆分为多个文本节点
+ */
+const handleSplitToTextNodes = () => {
+  if (!outputContent.value) return
+
+  // Split by double newline or single newline, filter empty
+  const segments = outputContent.value
+    .split(/\n\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+
+  if (segments.length <= 1) {
+    // Try single newline split
+    const singleLines = outputContent.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+    if (singleLines.length <= 1) {
+      window.$message?.warning('内容无法拆分（只有一行或内容为空）')
+      return
+    }
+    return doSplitToTextNodes(singleLines)
+  }
+
+  doSplitToTextNodes(segments)
+}
+
+const doSplitToTextNodes = (segments) => {
+  isSplitting.value = true
+  splitMessage.value = ''
+
+  try {
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const baseX = (currentNode?.position?.x || 0) + 450
+    const baseY = (currentNode?.position?.y || 0)
+    const rowSpacing = 180
+
+    // Start batch operation manually | 手动开始批量操作
+    startBatchOperation()
+
+    // Prepare node specs for batch creation | 准备批量创建的节点规格
+    const nodeSpecs = segments.map((content, index) => ({
+      type: 'text',
+      position: { x: baseX, y: baseY + index * rowSpacing },
+      data: {
+        content: content,
+        label: `拆分片段 ${index + 1}`
+      }
+    }))
+
+    // Batch create nodes (autoBatch=false) | 批量创建节点（autoBatch=false）
+    const createdIds = addNodes(nodeSpecs, false)
+
+    // Prepare edge specs for batch creation | 准备批量创建的边规格
+    const edgeSpecs = createdIds.map(nodeId => ({
+      source: props.id,
+      target: nodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left'
+    }))
+
+    // Batch create edges (autoBatch=false) | 批量创建边（autoBatch=false）
+    addEdges(edgeSpecs, false)
+
+    // End batch operation and save to history | 结束批量操作并保存到历史
+    endBatchOperation()
+
+    splitMessage.value = `已拆分为 ${segments.length} 个文本节点`
+    window.$message?.success(`已拆分为 ${segments.length} 个文本节点`)
+  } catch (err) {
+    window.$message?.error(`拆分失败: ${err.message}`)
+  } finally {
+    isSplitting.value = false
   }
 }
 </script>

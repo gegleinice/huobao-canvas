@@ -1,6 +1,6 @@
 <template>
-  <!-- Text node wrapper for hover area | 文本节点包裹层，扩展悬浮区域 -->
-  <div class="text-node-wrapper" @mouseenter="showActions = true" @mouseleave="showActions = false">
+  <!-- Text node wrapper | 文本节点包裹层 -->
+  <div class="text-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Text node | 文本节点 -->
     <div
       class="text-node bg-[var(--bg-secondary)] rounded-xl border min-w-[280px] max-w-[350px] relative transition-all duration-200"
@@ -9,16 +9,21 @@
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
         <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label }}</span>
         <div class="flex items-center gap-1">
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+            <n-icon :size="14">
+              <CopyOutline />
+            </n-icon>
+          </button>
+          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
           </button>
-          <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+          <!-- <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="展开">
             <n-icon :size="14">
               <ExpandOutline />
             </n-icon>
-          </button>
+          </button> -->
         </div>
       </div>
 
@@ -40,45 +45,9 @@
       </div>
 
       <!-- Handles | 连接点 -->
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+      <NodeHandleMenu :nodeId="id" nodeType="text" :visible="showHandleMenu" />
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
 
-    </div>
-
-    <!-- Hover action buttons | 悬浮操作按钮 -->
-    <!-- Top right - Copy button | 右上角 - 复制按钮 -->
-    <div v-show="showActions" class="absolute -top-5 right-12 z-[1000]">
-      <button @click="handleDuplicate"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <CopyOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-      </button>
-    </div>
-
-    <!-- Right side - Action buttons | 右侧 - 操作按钮 -->
-    <div v-show="showActions"
-      class="absolute right-10 top-1/2 -translate-y-1/2 translate-x-full flex flex-col gap-2 z-[1000]">
-      <!-- Image generation button | 图片生成按钮 -->
-      <button @click="handleImageGen"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <ImageOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">图片生成</span>
-      </button>
-      <!-- Video generation button | 视频生成按钮 -->
-      <button @click="handleVideoGen"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max">
-        <n-icon :size="16" class="text-gray-600">
-          <VideocamOutline />
-        </n-icon>
-        <span
-          class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">视频生成</span>
-      </button>
     </div>
   </div>
 </template>
@@ -91,8 +60,9 @@
 import { ref, watch, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
-import { TrashOutline, ExpandOutline, CopyOutline, ImageOutline, VideocamOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
+import { TrashOutline, ExpandOutline, CopyOutline } from '@vicons/ionicons5'
+import { updateNode, removeNode, duplicateNode, nodes } from '../../stores/canvas'
+import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useChat, useApiConfig } from '../../hooks'
 
 const props = defineProps({
@@ -113,10 +83,8 @@ const { send: sendChat } = useChat({
 })
 
 // Local content state | 本地内容状态
+const showHandleMenu = ref(false)
 const content = ref(props.data?.content || '')
-
-// Hover state | 悬浮状态
-const showActions = ref(false)
 
 // Polish loading state | 润色加载状态
 const isPolishing = ref(false)

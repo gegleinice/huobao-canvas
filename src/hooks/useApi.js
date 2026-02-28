@@ -152,7 +152,6 @@ export const useImageGeneration = () => {
         requestType: 'json',
         endpoint: modelConfig?.endpoint || '/images/generations'
       })
-
       // Parse response (OpenAI format) | 解析响应
       const data = response.data || response
       const generatedImages = (Array.isArray(data) ? data : [data]).map(item => ({

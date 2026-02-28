@@ -23,6 +23,7 @@ const WORKFLOW_TYPES = {
   TEXT_TO_IMAGE_TO_VIDEO: 'text_to_image_to_video',
   STORYBOARD: 'storyboard', // 分镜工作流
   MULTI_ANGLE_STORYBOARD: 'multi_angle_storyboard', // 多角度分镜工作流
+  PICTURE_BOOK: 'picture_book', // 儿童绘本工作流
 }
 
 // Multi-angle prompts | 多角度提示词模板
@@ -65,16 +66,17 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
 2. text_to_image_to_video - 用户想要生成图片并转成视频（包含"视频"、"动画"、"动起来"等关键词）
 3. storyboard - 用户想要生成分镜/多场景图片（包含"分镜"、"场景一"、"镜头"等关键词，或描述多个连续场景）
 4. multi_angle_storyboard - 用户想要生成多角度分镜（包含"多角度"、"正视"、"侧视"、"后视"、"俯视"、"四宫格"、"景别"等关键词）
+5. picture_book - 用户想要生成儿童绘本（包含"绘本"、"故事书"、"童话"、"儿童故事"、"picture book"等关键词）
 
 返回 JSON：
 {
-  "workflow_type": "text_to_image | text_to_image_to_video | storyboard | multi_angle_storyboard",
+  "workflow_type": "text_to_image | text_to_image_to_video | storyboard | multi_angle_storyboard | picture_book",
   "description": "简短描述",
-  
+
   // text_to_image 和 text_to_image_to_video 使用:
   "image_prompt": "优化后的图片生成提示词",
   "video_prompt": "视频生成提示词（仅 text_to_image_to_video）",
-  
+
   // storyboard 分镜工作流使用:
   "character": {
     "name": "角色名称",
@@ -86,10 +88,27 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
       "prompt": "该分镜的详细画面描述，包含角色动作、场景、光影等"
     }
   ],
-  
+
   // multi_angle_storyboard 多角度分镜工作流使用:
   "multi_angle": {
     "character_description": "角色的详细外观描述，包括服装、发型、体型、特征等"
+  },
+
+  // picture_book 儿童绘本工作流使用:
+  "picture_book": {
+    "title": "绘本标题",
+    "style": "插画风格描述，如水彩、蜡笔、扁平插画等",
+    "character": {
+      "name": "主角名称",
+      "description": "主角外观详细描述"
+    },
+    "pages": [
+      {
+        "page_number": 1,
+        "story_text": "该页的故事文字（给孩子读的）",
+        "illustration_prompt": "该页插画的详细描述，包含角色动作、场景、色彩、构图等，需保持风格一致"
+      }
+    ]
   }
 }
 
@@ -99,6 +118,10 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
 - character.description: 详细描述角色外观特征，便于后续分镜保持一致性
 - shots[].prompt: 每个分镜的完整画面描述，需包含角色名以保持一致性
 - multi_angle.character_description: 详细描述角色外观，用于生成多角度四宫格分镜
+- picture_book.style: 明确的插画风格，如"温暖水彩风"、"彩色蜡笔风"、"扁平矢量插画"等
+- picture_book.character.description: 详细描述主角外观特征，确保每页插画角色一致
+- picture_book.pages[].story_text: 简洁温馨的儿童故事文字，适合3-8岁孩子阅读
+- picture_book.pages[].illustration_prompt: 详细的插画描述，必须包含角色名和外观特征、场景、动作、色调，并注明插画风格以保持全书一致
 
 示例1 - 分镜工作流:
 输入: "蜡笔小新去上学。分镜一：清晨的战争；分镜二：出发的风姿"
@@ -124,6 +147,27 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
   "description": "红裙女孩多角度分镜",
   "multi_angle": {
     "character_description": "年轻女孩，长发飘逸，穿着优雅的红色连衣裙，白皙皮肤，精致五官，现代时尚风格"
+  }
+}
+
+示例3 - 儿童绘本工作流:
+输入: "小兔子找妈妈的绘本故事"
+输出:
+{
+  "workflow_type": "picture_book",
+  "description": "小兔子找妈妈绘本",
+  "picture_book": {
+    "title": "小兔子找妈妈",
+    "style": "温暖水彩风，柔和色调，圆润线条，儿童绘本插画风格",
+    "character": {
+      "name": "小兔子",
+      "description": "一只白色小兔子，圆圆的大眼睛，粉色的长耳朵，穿着蓝色小背带裤，毛茸茸的短尾巴"
+    },
+    "pages": [
+      {"page_number": 1, "story_text": "清晨，小兔子醒来发现妈妈不在身边。", "illustration_prompt": "温暖水彩风，一只穿蓝色背带裤的白色小兔子坐在小床上揉眼睛，阳光从窗户洒进温馨的小房间，柔和的暖色调，儿童绘本插画风格"},
+      {"page_number": 2, "story_text": "小兔子来到花园里，问蝴蝶姐姐：'你看到我妈妈了吗？'", "illustration_prompt": "温暖水彩风，穿蓝色背带裤的白色小兔子站在五彩缤纷的花园中，仰头看着一只彩色蝴蝶，绿草如茵，鲜花盛开，明亮温暖的色调，儿童绘本插画风格"},
+      {"page_number": 3, "story_text": "小兔子终于在胡萝卜地里找到了妈妈，开心地扑进妈妈怀里。", "illustration_prompt": "温暖水彩风，穿蓝色背带裤的白色小兔子扑进兔妈妈怀里，兔妈妈穿着围裙温柔地抱着小兔子，周围是橙色的胡萝卜地，温馨幸福的画面，柔和暖色调，儿童绘本插画风格"}
+    ]
   }
 }
 
@@ -654,9 +698,187 @@ export const useWorkflowOrchestrator = () => {
       throw err
     }
   }
-  
+
   /**
-   * Main execute function based on workflow type
+   * Wait for LLM config node to complete (outputContent ready)
+   * 等待 LLM 配置节点完成（outputContent 就绪）
+   */
+  const waitForLLMComplete = (llmNodeId) => {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('LLM 执行超时'))
+      }, 5 * 60 * 1000)
+
+      let stopWatcher = null
+
+      const checkNode = (node) => {
+        if (!node) return false
+
+        if (node.data?.error) {
+          clearTimeout(timeout)
+          if (stopWatcher) stopWatcher()
+          reject(new Error(node.data.error))
+          return true
+        }
+
+        if (node.data?.executed && node.data?.outputContent) {
+          clearTimeout(timeout)
+          if (stopWatcher) stopWatcher()
+          addLog('success', `LLM 节点 ${llmNodeId} 完成`)
+          resolve(node.data.outputContent)
+          return true
+        }
+        return false
+      }
+
+      const node = nodes.value.find(n => n.id === llmNodeId)
+      if (checkNode(node)) return
+
+      stopWatcher = watch(
+        () => nodes.value.find(n => n.id === llmNodeId),
+        (node) => checkNode(node),
+        { deep: true }
+      )
+
+      activeWatchers.push(stopWatcher)
+    })
+  }
+
+  /**
+   * Execute picture book workflow | 执行儿童绘本工作流
+   *
+   * 布局结构:
+   * [故事主题] → [LLM角色生成] → [角色参考图 imageConfig] → [角色图]
+   *                                                            ↓
+   *              [LLM页面1提示词] → [imageConfig] → [绘本页1]
+   *              [LLM页面2提示词] → [imageConfig] → [绘本页2]
+   *              ...
+   *
+   * 每页同时生成故事文字(text节点)和插画
+   */
+  const executePictureBook = async (pictureBook, position) => {
+    const nodeSpacing = 420
+    const rowSpacing = 280
+    let x = position.x
+    let y = position.y
+
+    const { title, style, character, pages } = pictureBook
+    const pageCount = pages?.length || 0
+
+    addLog('info', `开始执行儿童绘本工作流: ${title}, ${pageCount} 页`)
+    currentStep.value = 1
+    totalSteps.value = 2 + pageCount * 2
+
+    const createdNodes = {
+      characterLLMId: null,
+      characterConfigId: null,
+      characterImageId: null,
+      pages: []
+    }
+
+    try {
+      // Step 1: Create LLM node for character description → generate character reference image
+      // 创建角色描述 LLM 节点 → 生成角色参考图
+      const characterPrompt = `${character?.name || '角色'}: ${character?.description || ''}\n\n插画风格: ${style || '儿童绘本插画'}`
+      const characterTextId = addNode('text', { x, y }, {
+        content: characterPrompt,
+        label: `角色设定: ${character?.name || '主角'}`
+      })
+      addLog('info', `创建角色描述节点: ${characterTextId}`)
+      x += nodeSpacing
+
+      // Create imageConfig for character reference | 创建角色参考图配置
+      currentStep.value = 2
+      createdNodes.characterConfigId = addNode('imageConfig', { x, y }, {
+        label: `${character?.name || '角色'}参考图`,
+        autoExecute: true
+      })
+      addLog('info', `创建角色参考图配置: ${createdNodes.characterConfigId}`)
+
+      addEdge({
+        source: characterTextId,
+        target: createdNodes.characterConfigId,
+        sourceHandle: 'right',
+        targetHandle: 'left'
+      })
+
+      // Wait for character image | 等待角色参考图
+      addLog('info', '等待角色参考图生成...')
+      createdNodes.characterImageId = await waitForConfigComplete(createdNodes.characterConfigId)
+      await waitForOutputReady(createdNodes.characterImageId)
+      addLog('success', '角色参考图已生成')
+
+      // Step 3+: Create each page | 创建每一页
+      for (let i = 0; i < pageCount; i++) {
+        const page = pages[i]
+        const pageY = y + (i + 1) * rowSpacing
+        let pageX = position.x
+
+        currentStep.value = 3 + i * 2
+
+        // Create story text node for this page | 创建该页故事文字节点
+        const storyTextId = addNode('text', { x: pageX, y: pageY - 80 }, {
+          content: page.story_text,
+          label: `第${page.page_number}页 故事文字`
+        })
+        addLog('info', `创建第${page.page_number}页故事文字: ${storyTextId}`)
+
+        // Create illustration prompt text node | 创建插画提示词节点
+        const illustrationPromptId = addNode('text', { x: pageX, y: pageY + 40 }, {
+          content: page.illustration_prompt,
+          label: `第${page.page_number}页 插画提示词`
+        })
+        addLog('info', `创建第${page.page_number}页插画提示词: ${illustrationPromptId}`)
+        pageX += nodeSpacing
+
+        // Create imageConfig for this page | 创建该页图片配置
+        currentStep.value = 4 + i * 2
+        const pageConfigId = addNode('imageConfig', { x: pageX, y: pageY }, {
+          label: `绘本第${page.page_number}页`,
+          autoExecute: true
+        })
+        addLog('info', `创建第${page.page_number}页图片配置: ${pageConfigId}`)
+
+        // Connect illustration prompt → imageConfig
+        addEdge({
+          source: illustrationPromptId,
+          target: pageConfigId,
+          sourceHandle: 'right',
+          targetHandle: 'left'
+        })
+
+        // Connect character image → imageConfig (as reference for consistency)
+        addEdge({
+          source: createdNodes.characterImageId,
+          target: pageConfigId,
+          sourceHandle: 'right',
+          targetHandle: 'left'
+        })
+
+        // Wait for page image | 等待该页插画完成
+        addLog('info', `等待第${page.page_number}页插画生成...`)
+        const pageImageId = await waitForConfigComplete(pageConfigId)
+        await waitForOutputReady(pageImageId)
+        addLog('success', `第${page.page_number}页插画已生成`)
+
+        createdNodes.pages.push({
+          storyTextId,
+          illustrationPromptId,
+          configId: pageConfigId,
+          imageId: pageImageId,
+          pageNumber: page.page_number
+        })
+      }
+
+      addLog('success', `绘本工作流完成: ${title}，共 ${pageCount} 页`)
+      return createdNodes
+    } catch (err) {
+      addLog('error', `绘本工作流执行失败: ${err.message}`)
+      throw err
+    }
+  }
+
+  /**
    * 根据工作流类型执行
    * @param {object} params - 工作流参数
    * @param {object} position - 起始位置
@@ -666,10 +888,12 @@ export const useWorkflowOrchestrator = () => {
     clearWatchers()
     executionLog.value = []
     
-    const { workflow_type, image_prompt, video_prompt, character, shots, multi_angle } = params
-    
+    const { workflow_type, image_prompt, video_prompt, character, shots, multi_angle, picture_book } = params
+
     try {
       switch (workflow_type) {
+        case WORKFLOW_TYPES.PICTURE_BOOK:
+          return await executePictureBook(picture_book, position)
         case WORKFLOW_TYPES.MULTI_ANGLE_STORYBOARD:
           return await executeMultiAngleStoryboard(multi_angle, position)
         case WORKFLOW_TYPES.STORYBOARD:
@@ -705,7 +929,17 @@ export const useWorkflowOrchestrator = () => {
       multi_angle: { character_description: characterDescription }
     }, position)
   }
-  
+
+  /**
+   * Convenience method for picture book | 儿童绘本简便方法
+   */
+  const createPictureBook = (pictureBookParams, position) => {
+    return executeWorkflow({
+      workflow_type: WORKFLOW_TYPES.PICTURE_BOOK,
+      picture_book: pictureBookParams
+    }, position)
+  }
+
   /**
    * Reset state | 重置状态
    */
@@ -731,6 +965,7 @@ export const useWorkflowOrchestrator = () => {
     executeWorkflow,
     createTextToImageWorkflow,
     createMultiAngleStoryboard,
+    createPictureBook,
     reset,
     
     // Constants

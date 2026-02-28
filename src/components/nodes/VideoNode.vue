@@ -1,6 +1,6 @@
 <template>
-  <!-- Video node wrapper for hover area | 视频节点包裹层，扩展悬浮区域 -->
-  <div class="video-node-wrapper relative" @mouseenter="showActions = true" @mouseleave="showActions = false">
+  <!-- Video node wrapper | 视频节点包裹层 -->
+  <div class="video-node-wrapper relative" @mouseenter="showActions = true; showHandleMenu = true" @mouseleave="showActions = false; showHandleMenu = false">
     <!-- Video node | 视频节点 -->
     <div 
       class="video-node bg-[var(--bg-secondary)] rounded-xl border w-[400px] relative transition-all duration-200"
@@ -12,15 +12,16 @@
       <div class="flex items-center justify-between">
         <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label }}</span>
         <div class="flex items-center gap-1">
-          <button 
-            @click="handleDelete"
-            class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
-          >
-            <n-icon :size="14"><TrashOutline /></n-icon>
+          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+            <n-icon :size="14">
+              <CopyOutline />
+            </n-icon>
           </button>
-          <!-- <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
-            <n-icon :size="14"><ExpandOutline /></n-icon>
-          </button> -->
+          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
+            <n-icon :size="14">
+              <TrashOutline />
+            </n-icon>
+          </button>
         </div>
       </div>
       <!-- Model name | 模型名称 -->
@@ -91,23 +92,8 @@
     </div>
 
     <!-- Handles | 连接点 -->
-    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+    <NodeHandleMenu :nodeId="id" nodeType="video" :visible="showHandleMenu" />
     <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-    </div>
-
-    <!-- Hover action buttons | 悬浮操作按钮 -->
-    <!-- Top right - Copy button | 右上角 - 复制按钮 -->
-    <div 
-      v-show="showActions"
-      class="absolute -top-5 right-12 z-[1000]"
-    >
-      <button 
-        @click="handleDuplicate"
-        class="action-btn group p-2 bg-white rounded-lg transition-all border border-gray-200 flex items-center gap-0 hover:gap-1.5 w-max"
-      >
-        <n-icon :size="16" class="text-gray-600"><CopyOutline /></n-icon>
-        <span class="text-xs text-gray-600 max-w-0 overflow-hidden group-hover:max-w-[60px] transition-all duration-200 whitespace-nowrap">复制</span>
-      </button>
     </div>
 
     <!-- Right side - Action buttons | 右侧 - 操作按钮 -->
@@ -145,6 +131,7 @@ import { Handle, Position } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
 import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline } from '@vicons/ionicons5'
 import { updateNode, removeNode, duplicateNode } from '../../stores/canvas'
+import NodeHandleMenu from './NodeHandleMenu.vue'
 
 const props = defineProps({
   id: String,
@@ -153,6 +140,7 @@ const props = defineProps({
 
 // Hover state | 悬浮状态
 const showActions = ref(false)
+const showHandleMenu = ref(false)
 
 // Handle file upload | 处理文件上传
 const handleFileUpload = (event) => {
