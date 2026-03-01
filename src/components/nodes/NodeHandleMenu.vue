@@ -5,12 +5,17 @@
     <Handle type="source" :position="Position.Right" id="right" style="width: 12px; height: 12px;" />
 
     <!-- Hover zone with + icon | 带 + 图标的悬浮区域 -->
-    <div v-if="visible && showHandleHoverZone" class="handle-hover-zone" @mouseenter="showMenu = true" @mouseleave="showMenu = false">
+    <div v-if="true && showHandleHoverZone" class="handle-hover-zone"
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave">
       <n-icon :size="14" class="add-icon">
         <AddOutline />
       </n-icon>
       <transition name="menu-fade">
-        <div v-if="showMenu" class="handle-menu" @mousedown.stop>
+        <div v-if="showMenu" class="handle-menu"
+          @mouseenter="handleMenuMouseEnter"
+          @mouseleave="handleMenuMouseLeave"
+          @mousedown.stop>
           <button v-for="item in menuItems" :key="item.type" @click.stop="handleCreate(item)" class="menu-item group">
             <n-icon :size="14" class="text-gray-500 group-hover:text-white">
               <component :is="item.icon" />
@@ -25,10 +30,9 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Handle, Position, useVueFlow } from '@vue-flow/core'
+import { Handle, Position } from '@vue-flow/core'
 import { NIcon } from 'naive-ui'
-import { ImageOutline, VideocamOutline, ChatbubbleOutline, DocumentTextOutline, GitNetworkOutline, AddOutline } from '@vicons/ionicons5'
-import { addNode, addEdge, nodes } from '../../stores/canvas'
+import { AddOutline } from '@vicons/ionicons5'
 
 const props = defineProps({
   nodeId: { type: String, required: true },
@@ -38,82 +42,58 @@ const props = defineProps({
   operations: { type: Array, default: null } // 传空数组则不显示 handle-hover-zone
 })
 
-const { updateNodeInternals, connection } = useVueFlow()
+// Emit select event to parent component | 向父组件发送选择事件
+const emit = defineEmits(['select'])
+
 const showMenu = ref(false)
+let hideTimeout = null
 
-// Handle click to start connection | 点击开始连线
-const handleStartConnection = () => {
-  // Set connection to start a new edge from this node
-  // This will show the connecting line that follows the mouse
-  connection.value = {
-    source: props.nodeId,
-    sourceHandle: 'right'
+// Handle mouse enter with delay cancellation
+const handleMouseEnter = () => {
+  if (hideTimeout) {
+    clearTimeout(hideTimeout)
+    hideTimeout = null
   }
-  showMenu.value = false
+  showMenu.value = true
 }
 
-// Define connectable targets per node type | 定义每种节点类型可连接的目标
-const MENU_CONFIG = {
-  text: [
-    { type: 'imageConfig', label: '生图', icon: ImageOutline },
-    { type: 'videoConfig', label: '生视频', icon: VideocamOutline },
-    { type: 'llmConfig', label: 'LLM', icon: ChatbubbleOutline }
-  ],
-  image: [
-    { type: 'imageConfig', label: '图生图', icon: ImageOutline },
-    { type: 'videoConfig', label: '生视频', icon: VideocamOutline }
-  ],
-  imageConfig: [
-    { type: 'imageConfig', label: '图生图', icon: ImageOutline }
-  ],
-  llmConfig: [
-    { type: 'imageConfig', label: '生图', icon: ImageOutline },
-    { type: 'videoConfig', label: '生视频', icon: VideocamOutline },
-    { type: 'text', label: '文本', icon: DocumentTextOutline }
-  ],
-  videoConfig: [],
-  video: [
-    { type: 'videoConfig', label: '生视频', icon: VideocamOutline }
-  ]
+// Handle mouse leave with delay
+const handleMouseLeave = () => {
+  hideTimeout = setTimeout(() => {
+    showMenu.value = false
+  }, 150)
 }
 
+// Handle menu mouse enter - cancel hide timeout
+const handleMenuMouseEnter = () => {
+  if (hideTimeout) {
+    clearTimeout(hideTimeout)
+    hideTimeout = null
+  }
+  showMenu.value = true
+}
+
+// Handle menu mouse leave with delay
+const handleMenuMouseLeave = () => {
+  hideTimeout = setTimeout(() => {
+    showMenu.value = false
+  }, 150)
+}
+
+// Menu items from operations prop | 从 operations prop 获取菜单项
 const menuItems = computed(() => {
-  // If operations prop is provided (including empty array), use it; otherwise fall back to MENU_CONFIG
-  if (props.operations !== null) {
-    return props.operations
-  }
-  return MENU_CONFIG[props.nodeType] || []
+  return props.operations || []
 })
 
 // Whether to show handle-hover-zone | 是否显示 handle-hover-zone
 const showHandleHoverZone = computed(() => {
-  return props.operations !== null ? props.operations.length > 0 : (MENU_CONFIG[props.nodeType] || []).length > 0
+  return props.operations && props.operations.length > 0
 })
 
+// Emit select event to parent component | 向父组件发送选择事件
 const handleCreate = (item) => {
-  const currentNode = nodes.value.find(n => n.id === props.nodeId)
-  const x = (currentNode?.position?.x || 0) + 400
-  const y = (currentNode?.position?.y || 0)
-
-  const defaultData = {
-    imageConfig: { model: 'doubao-seedream-4-5-251128', size: '2048x2048', label: '文生图' },
-    videoConfig: { label: '视频生成' },
-    llmConfig: { label: 'LLM文本生成' },
-    text: { content: '', label: '文本输入' }
-  }
-
-  const newId = addNode(item.type, { x, y }, defaultData[item.type] || {})
-
-  addEdge({
-    source: props.nodeId,
-    target: newId,
-    sourceHandle: 'right',
-    targetHandle: 'left'
-  })
-
-  setTimeout(() => updateNodeInternals(newId), 50)
+  emit('select', item)
   showMenu.value = false
-  window.$message?.success(`已创建${item.label}节点`)
 }
 </script>
 

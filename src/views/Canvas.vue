@@ -544,11 +544,32 @@ const onConnect = (params) => {
   } else if (sourceNode?.type === 'image' && targetNode?.type === 'imageConfig') {
     // Use imageOrder edge type | 使用图片顺序边类型
     // Calculate next order number | 计算下一个顺序号
-    const existingImageEdges = edges.value.filter(e => 
+    const existingImageEdges = edges.value.filter(e =>
       e.target === params.target && e.type === 'imageOrder'
     )
-    const nextOrder = existingImageEdges.length + 1
-    
+
+    // Get @ mentioned image count from connected TextNodes | 获取已连接 TextNode 中 @ 提及的图片数量
+    let mentionedImageCount = 0
+    const connectedTextEdges = edges.value.filter(e => e.target === params.target)
+    for (const edge of connectedTextEdges) {
+      const sourceNode = nodes.value.find(n => n.id === edge.source)
+      if (sourceNode?.type === 'text') {
+        const content = sourceNode.data?.content || ''
+        // Count @ mentions of image nodes | 统计图片节点的 @ 提及
+        const mentionRegex = /@\[([^\]|]+)(?:\|([^\]]+))?\]/g
+        let match
+        while ((match = mentionRegex.exec(content)) !== null) {
+          const mentionedNode = nodes.value.find(n => n.id === match[1])
+          if (mentionedNode?.type === 'image') {
+            mentionedImageCount++
+          }
+        }
+      }
+    }
+
+    // Next order = existing edges + mentioned image count + 1 | 下一个序号 = 现有边数 + @提及图片数 + 1
+    const nextOrder = existingImageEdges.length + mentionedImageCount + 1
+
     addEdge({
       ...params,
       type: 'imageOrder',

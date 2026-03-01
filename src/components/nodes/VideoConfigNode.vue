@@ -6,7 +6,21 @@
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
       <!-- Header | 头部 -->
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
-        <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label || '视频生成' }}</span>
+        <span
+          v-if="!isEditingLabel"
+          @dblclick="startEditLabel"
+          class="text-sm font-medium text-[var(--text-secondary)] cursor-text hover:bg-[var(--bg-tertiary)] px-1 rounded transition-colors"
+          title="双击编辑名称"
+        >{{ data.label || '视频生成' }}</span>
+        <input
+          v-else
+          ref="labelInputRef"
+          v-model="editingLabelValue"
+          @blur="finishEditLabel"
+          @keydown.enter="finishEditLabel"
+          @keydown.escape="cancelEditLabel"
+          class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
+        />
         <div class="flex items-center gap-1">
           <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
@@ -132,7 +146,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
-import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline } from '@vicons/ionicons5'
+import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline } from '@vicons/ionicons5'
 import { useVideoGeneration, useApiConfig } from '../../hooks'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
@@ -157,6 +171,11 @@ const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
 const localDuration = ref(props.data?.dur || 5)
+
+// Label editing state | Label 编辑状态
+const isEditingLabel = ref(false)
+const editingLabelValue = ref('')
+const labelInputRef = ref(null)
 
 // Get connected images with roles | 获取连接的图片及其角色
 const connectedImages = computed(() => {
@@ -402,6 +421,30 @@ const handleGenerate = async () => {
     })
     window.$message?.error(err.message || '视频生成失败')
   }
+}
+
+// Start editing label | 开始编辑 label
+const startEditLabel = () => {
+  editingLabelValue.value = props.data?.label || '视频生成'
+  isEditingLabel.value = true
+  nextTick(() => {
+    labelInputRef.value?.focus()
+    labelInputRef.value?.select()
+  })
+}
+
+// Finish editing label | 完成编辑 label
+const finishEditLabel = () => {
+  const newLabel = editingLabelValue.value.trim()
+  if (newLabel && newLabel !== props.data?.label) {
+    updateNode(props.id, { label: newLabel })
+  }
+  isEditingLabel.value = false
+}
+
+// Cancel editing label | 取消编辑 label
+const cancelEditLabel = () => {
+  isEditingLabel.value = false
 }
 
 // Handle delete | 处理删除

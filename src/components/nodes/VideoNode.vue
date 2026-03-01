@@ -10,7 +10,21 @@
     <!-- Header | 头部 -->
     <div class="px-3 py-2 border-b border-[var(--border-color)]">
       <div class="flex items-center justify-between">
-        <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label }}</span>
+        <span
+          v-if="!isEditingLabel"
+          @dblclick="startEditLabel"
+          class="text-sm font-medium text-[var(--text-secondary)] cursor-text hover:bg-[var(--bg-tertiary)] px-1 rounded transition-colors"
+          title="双击编辑名称"
+        >{{ data.label }}</span>
+        <input
+          v-else
+          ref="labelInputRef"
+          v-model="editingLabelValue"
+          @blur="finishEditLabel"
+          @keydown.enter="finishEditLabel"
+          @keydown.escape="cancelEditLabel"
+          class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
+        />
         <div class="flex items-center gap-1">
           <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
@@ -92,7 +106,7 @@
     </div>
 
     <!-- Handles | 连接点 -->
-    <NodeHandleMenu :nodeId="id" nodeType="video" :visible="showHandleMenu" />
+    <NodeHandleMenu :nodeId="id" nodeType="video" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
     </div>
 
@@ -126,11 +140,11 @@
  * Video node component | 视频节点组件
  * Displays and manages video content
  */
-import { ref } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { ref, nextTick } from 'vue'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
-import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode } from '../../stores/canvas'
+import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline, CreateOutline } from '@vicons/ionicons5'
+import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 
 const props = defineProps({
@@ -138,9 +152,43 @@ const props = defineProps({
   data: Object
 })
 
+// Vue Flow instance
+const { updateNodeInternals } = useVueFlow()
+
 // Hover state | 悬浮状态
 const showActions = ref(false)
 const showHandleMenu = ref(false)
+
+// Label editing state | Label 编辑状态
+const isEditingLabel = ref(false)
+const editingLabelValue = ref('')
+const labelInputRef = ref(null)
+
+// Video node menu operations | 视频节点菜单操作
+const operations = [
+  { type: 'videoConfig', label: '生视频', icon: VideocamOutline }
+]
+
+// Handle menu select | 处理菜单选择
+const handleSelect = (item) => {
+  const currentNode = nodes.value.find(n => n.id === props.id)
+  const nodeX = currentNode?.position?.x || 0
+  const nodeY = currentNode?.position?.y || 0
+
+  const newId = addNode('videoConfig', { x: nodeX + 400, y: nodeY }, { label: '视频生成' })
+
+  addEdge({
+    source: props.id,
+    target: newId,
+    sourceHandle: 'right',
+    targetHandle: 'left'
+  })
+
+  setTimeout(() => {
+    updateNodeInternals(newId)
+  }, 50)
+  window.$message?.success(`已创建视频生成节点`)
+}
 
 // Handle file upload | 处理文件上传
 const handleFileUpload = (event) => {
@@ -159,6 +207,30 @@ const formatDuration = (seconds) => {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+// Start editing label | 开始编辑 label
+const startEditLabel = () => {
+  editingLabelValue.value = props.data?.label || ''
+  isEditingLabel.value = true
+  nextTick(() => {
+    labelInputRef.value?.focus()
+    labelInputRef.value?.select()
+  })
+}
+
+// Finish editing label | 完成编辑 label
+const finishEditLabel = () => {
+  const newLabel = editingLabelValue.value.trim()
+  if (newLabel && newLabel !== props.data?.label) {
+    updateNode(props.id, { label: newLabel })
+  }
+  isEditingLabel.value = false
+}
+
+// Cancel editing label | 取消编辑 label
+const cancelEditLabel = () => {
+  isEditingLabel.value = false
 }
 
 // Handle delete | 处理删除

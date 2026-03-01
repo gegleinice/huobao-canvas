@@ -31,7 +31,7 @@
 import { computed } from 'vue'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, useVueFlow } from '@vue-flow/core'
 import { NDropdown } from 'naive-ui'
-import { edges } from '../../stores/canvas'
+import { edges, nodes } from '../../stores/canvas'
 
 // Get VueFlow instance | 获取 VueFlow 实例
 const { updateEdgeData } = useVueFlow()
@@ -60,15 +60,42 @@ const orderLabels = [
   { label: '⑤ 第五张', key: 5 }
 ]
 
-// Dynamic order options based on connected edges count | 基于连接边数量的动态顺序选项
+// Dynamic order options based on connected edges count + @ mentioned images | 基于连接边数量和@提及图片的动态顺序选项
 const orderOptions = computed(() => {
-  // Get all imageOrder edges connected to the same target | 获取连接到同一目标的所有图片边
-  const sameTargetImageEdges = edges.value.filter(edge => 
-    edge.target === props.target && 
+  // Get all imageOrder edges connected to the same target | 获取连接到同一目标的图片边
+  const sameTargetImageEdges = edges.value.filter(edge =>
+    edge.target === props.target &&
     edge.type === 'imageOrder'
   )
-  const count = sameTargetImageEdges.length || 1
-  return orderLabels.slice(0, count)
+  const edgeCount = sameTargetImageEdges.length || 1
+
+  // Get @ mentioned image count from connected TextNodes | 获取已连接 TextNode 中 @ 提及的图片数量
+  let mentionedImageCount = 0
+  const connectedTextEdges = edges.value.filter(e => e.target === props.target)
+  for (const edge of connectedTextEdges) {
+    const sourceNode = nodes.value.find(n => n.id === edge.source)
+    if (sourceNode?.type === 'text') {
+      const content = sourceNode.data?.content || ''
+      // Count @ mentions of image nodes | 统计图片节点的 @ 提及
+      const mentionRegex = /@\[([^\]|]+)(?:\|([^\]]+))?\]/g
+      let match
+      while ((match = mentionRegex.exec(content)) !== null) {
+        const mentionedNode = nodes.value.find(n => n.id === match[1])
+        if (mentionedNode?.type === 'image') {
+          mentionedImageCount++
+        }
+      }
+    }
+  }
+
+  // Minimum order is mentionedImageCount + 1 | 最小顺序是 @ 提及图片数量 + 1
+  const minOrder = mentionedImageCount + 1
+  // Total count = edge count + mentioned image count | 总数量 = 边数量 + @ 提及图片数量
+  const totalCount = edgeCount + mentionedImageCount
+  const maxOrder = Math.min(totalCount, 5)
+
+  // Return options from minOrder to maxOrder | 返回从 minOrder 到 maxOrder 的选项
+  return orderLabels.filter(label => label.key >= minOrder && label.key <= maxOrder)
 })
 
 // Current order from edge data | 从边数据获取当前顺序

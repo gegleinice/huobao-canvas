@@ -7,7 +7,21 @@
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
       <!-- Header | 头部 -->
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
-        <span class="text-sm font-medium text-[var(--text-secondary)]">{{ data.label }}</span>
+        <span
+          v-if="!isEditingLabel"
+          @dblclick="startEditLabel"
+          class="text-sm font-medium text-[var(--text-secondary)] cursor-text hover:bg-[var(--bg-tertiary)] px-1 rounded transition-colors"
+          title="双击编辑名称"
+        >{{ data.label }}</span>
+        <input
+          v-else
+          ref="labelInputRef"
+          v-model="editingLabelValue"
+          @blur="finishEditLabel"
+          @keydown.enter="finishEditLabel"
+          @keydown.escape="cancelEditLabel"
+          class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
+        />
         <div class="flex items-center gap-1">
           <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
@@ -140,7 +154,7 @@
 
       <!-- Handles | 连接点 -->
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" :visible="showHandleMenu" />
+      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
 
   </div>
@@ -154,11 +168,12 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
-import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline } from '@vicons/ionicons5'
+import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
 import { useImageGeneration, useApiConfig } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { imageModelOptions, getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
+import { parseMentions } from '../../hooks/useNodeRef'
 
 const props = defineProps({
   id: String,
@@ -179,6 +194,44 @@ const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
+
+// Label editing state | Label 编辑状态
+const isEditingLabel = ref(false)
+const editingLabelValue = ref('')
+const labelInputRef = ref(null)
+
+// ImageConfig node menu operations | 图片配置节点菜单操作
+const operations = [
+  // { type: 'imageConfig', label: '图生图', icon: ImageOutline, action: 'imageConfig_imageConfig' }
+]
+
+// Handle menu select | 处理菜单选择
+const handleSelect = (item) => {
+  const action = item.action
+
+  if (action === 'imageConfig_imageConfig') {
+    // Image-to-image (create new image node for editing) | 图生图（创建新图片节点用于编辑）
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const nodeX = currentNode?.position?.x || 0
+    const nodeY = currentNode?.position?.y || 0
+
+    // Create new image node for editing
+    const imageNodeId = addNode('image', { x: nodeX + 400, y: nodeY }, {
+      label: '图片编辑'
+    })
+
+    // Connect current config to new image node
+    addEdge({
+      source: props.id,
+      target: imageNodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left'
+    })
+
+    setTimeout(() => updateNodeInternals(imageNodeId), 50)
+    window.$message?.success('已创建图片编辑节点')
+  }
+}
 
 // Get current model config | 获取当前模型配置
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
@@ -234,11 +287,153 @@ onMounted(() => {
   }
 })
 
+// 解析 textNode 内容中的 @ 引用，转换为简短引用（如 图 1）并收集图片
+const resolveTextMentionsForImage = (textNode) => {
+  const content = textNode.data?.content || ''
+  const mentions = parseMentions(content)
+
+  if (mentions.length === 0) {
+    return { resolvedContent: content, refImages: [] }
+  }
+
+  // 收集引用的图片节点
+  const imageMentions = []
+  for (const mention of mentions) {
+    const referencedNode = nodes.value.find(n => n.id === mention.nodeId)
+    if (referencedNode?.type === 'image') {
+      const imageData = referencedNode.data?.base64 || referencedNode.data?.url
+      if (imageData) {
+        imageMentions.push({
+          order: mention.order,
+          nodeId: mention.nodeId,
+          imageData
+        })
+      }
+    }
+  }
+
+  if (imageMentions.length === 0) {
+    return { resolvedContent: content, refImages: [] }
+  }
+
+  // 按出现顺序排序
+  imageMentions.sort((a, b) => a.order - b.order)
+
+  // 替换 @[nodeId] 为按顺序的 "图1"、"图2" 等
+  let resolvedContent = content
+  for (let i = 0; i < imageMentions.length; i++) {
+    const mention = imageMentions[i]
+    const placeholder = `@[${mention.nodeId}]`
+    // 按排序后的索引替换为 "图1"、"图2" 等
+    resolvedContent = resolvedContent.replace(placeholder, `图${i + 1}`)
+  }
+
+  // 返回解析后的内容和图片数组（按引用顺序）
+  const refImages = imageMentions.map(m => m.imageData)
+
+  return { resolvedContent, refImages }
+}
+
+// Computed connected prompts (sorted by order) | 计算连接的提示词（按顺序排列）
+const connectedPrompts = computed(() => {
+  return getConnectedInputs().prompts
+})
+
+// Computed connected reference images | 计算连接的参考图
+const connectedRefImages = computed(() => {
+  return getConnectedInputs().refImages
+})
+
+// 已连接的文本节点 ID 列表（用于 @ 提及时过滤）
+const connectedTextNodeIds = computed(() => {
+  const incomingEdges = edges.value.filter(e => e.target === props.id)
+  const connectedIds = []
+  for (const edge of incomingEdges) {
+    const sourceNode = nodes.value.find(n => n.id === edge.source)
+    if (sourceNode?.type === 'text') {
+      connectedIds.push(sourceNode.id)
+    }
+  }
+  return connectedIds
+})
+
 // Get connected nodes | 获取连接的节点
 const getConnectedInputs = () => {
+  // 1. First check @ mentions | 首先检查 @ 引用
+  // Only check connected TextNodes | 只检查已连接的 TextNode
+  const textNodes = nodes.value.filter(n => n.type === 'text' && connectedTextNodeIds.value.includes(n.id))
+  const mentionsPrompts = []
+  const mentionsRefImages = []
+
+  for (const textNode of textNodes) {
+    const { resolvedContent, refImages: nodeRefImages } = resolveTextMentionsForImage(textNode)
+
+    // 如果有解析出图片引用
+    if (nodeRefImages.length > 0) {
+      // 添加解析后的提示词内容
+      mentionsPrompts.push({
+        order: mentionsPrompts.length,
+        content: resolvedContent,
+        nodeId: textNode.id
+      })
+
+      // 添加参考图
+      for (const imageData of nodeRefImages) {
+        mentionsRefImages.push({
+          order: mentionsRefImages.length,
+          imageData,
+          nodeId: textNode.id
+        })
+      }
+    }
+  }
+
+  // 2. Get edge-connected ImageNodes | 获取边连接的 ImageNode
   const connectedEdges = edges.value.filter(e => e.target === props.id)
+  const edgeRefImages = [] // Array of { order, imageData, nodeId } | 参考图数组
+
+  for (const edge of connectedEdges) {
+    const sourceNode = nodes.value.find(n => n.id === edge.source)
+    if (!sourceNode) continue
+
+    if (sourceNode.type === 'image') {
+      // Prefer base64, fallback to url | 优先使用 base64，回退到 url
+      const imageData = sourceNode.data?.base64 || sourceNode.data?.url
+      if (imageData) {
+        // Get order from edge data, default to 1 | 从边数据获取顺序，默认为1
+        // Add offset of @ mentions count | 加上 @ 提及图片数量的偏移
+        const baseOrder = edge.data?.imageOrder || 1
+        const order = mentionsRefImages.length + baseOrder
+        edgeRefImages.push({ order, imageData, nodeId: sourceNode.id })
+      }
+    }
+  }
+
+  // 3. Merge and sort refImages | 合并并排序参考图
+  // Combine @ mentions refImages and edge-connected refImages | 合并 @ 提及和边连接的图片
+  const allRefImages = [...mentionsRefImages, ...edgeRefImages]
+  // Sort by order | 按顺序排序
+  allRefImages.sort((a, b) => a.order - b.order)
+  const sortedRefImages = allRefImages.map(r => r.imageData)
+
+  // 4. If there are @ mentions, use them | 如果有 @ 提及，使用它们
+  if (mentionsPrompts.length > 0) {
+    // Sort prompts by order | 按顺序排序提示词
+    mentionsPrompts.sort((a, b) => a.order - b.order)
+    const combinedPrompt = mentionsPrompts.map(p => p.content).join('\n\n')
+
+    return {
+      prompt: combinedPrompt,
+      prompts: mentionsPrompts,
+      refImages: sortedRefImages,
+      refImagesWithOrder: allRefImages,
+      fromMentions: true
+    }
+  }
+
+  // 5. Fallback to edge connections | 降级到边的连接
+  // (only prompts, no @ mentions) （只有提示词，没有 @ 提及）
   const prompts = [] // Array of { order, content } | 提示词数组
-  const refImages = [] // Array of { order, imageData, nodeId } | 参考图数组
 
   for (const edge of connectedEdges) {
     const sourceNode = nodes.value.find(n => n.id === edge.source)
@@ -258,43 +453,35 @@ const getConnectedInputs = () => {
         const order = edge.data?.promptOrder || 1
         prompts.push({ order, content, nodeId: sourceNode.id })
       }
-    } else if (sourceNode.type === 'image') {
-      // Prefer base64, fallback to url | 优先使用 base64，回退到 url
-      const imageData = sourceNode.data?.base64 || sourceNode.data?.url
-      if (imageData) {
-        // Get order from edge data, default to 1 | 从边数据获取顺序，默认为1
-        const order = edge.data?.imageOrder || 1
-        refImages.push({ order, imageData, nodeId: sourceNode.id })
-      }
     }
+    // Note: ImageNode handling moved to step 2 above | 注意：ImageNode 处理已移至步骤 2
   }
 
   // Sort prompts by order and concatenate | 按顺序排序并拼接
   prompts.sort((a, b) => a.order - b.order)
   const combinedPrompt = prompts.map(p => p.content).join('\n\n')
 
-  // Sort refImages by order | 按顺序排序参考图
-  refImages.sort((a, b) => a.order - b.order)
-  const sortedRefImages = refImages.map(r => r.imageData)
-
-  return { prompt: combinedPrompt, prompts, refImages: sortedRefImages, refImagesWithOrder: refImages }
+  // Use edge-connected refImages (already sorted above) | 使用边连接的参考图（已在上面排序）
+  return { prompt: combinedPrompt, prompts, refImages: sortedRefImages, refImagesWithOrder: allRefImages, fromMentions: false }
 }
-
-// Computed connected prompts (sorted by order) | 计算连接的提示词（按顺序排列）
-const connectedPrompts = computed(() => {
-  return getConnectedInputs().prompts
-})
-
-// Computed connected reference images | 计算连接的参考图
-const connectedRefImages = computed(() => {
-  return getConnectedInputs().refImages
-})
 
 // Handle model selection | 处理模型选择
 const handleModelSelect = (key) => {
   localModel.value = key
-  // Only update model, keep size and quality unchanged | 仅更新模型，保持尺寸和画质不变
-  updateNode(props.id, { model: key })
+  // Set default size for new model | 为新模型设置默认尺寸
+  const newSizeOptions = getModelSizeOptions(key, localQuality.value)
+  if (newSizeOptions.length > 0) {
+    // Find best size: 2048 or closest | 查找最佳尺寸：2048 或最接近的
+    let defaultSize = newSizeOptions.find(o => o.key === '2048x2048')?.key
+    if (!defaultSize) {
+      // Try to find 1024 or the largest available
+      defaultSize = newSizeOptions.find(o => o.key.includes('1024'))?.key || newSizeOptions[0].key
+    }
+    localSize.value = defaultSize
+    updateNode(props.id, { model: key, size: defaultSize })
+  } else {
+    updateNode(props.id, { model: key })
+  }
 }
 
 // Handle quality selection | 处理画质选择
@@ -491,6 +678,30 @@ const handleDuplicate = () => {
       updateNodeInternals(newNodeId)
     }, 50)
   }
+}
+
+// Start editing label | 开始编辑 label
+const startEditLabel = () => {
+  editingLabelValue.value = props.data?.label || ''
+  isEditingLabel.value = true
+  nextTick(() => {
+    labelInputRef.value?.focus()
+    labelInputRef.value?.select()
+  })
+}
+
+// Finish editing label | 完成编辑 label
+const finishEditLabel = () => {
+  const newLabel = editingLabelValue.value.trim()
+  if (newLabel && newLabel !== props.data?.label) {
+    updateNode(props.id, { label: newLabel })
+  }
+  isEditingLabel.value = false
+}
+
+// Cancel editing label | 取消编辑 label
+const cancelEditLabel = () => {
+  isEditingLabel.value = false
 }
 
 // Handle delete | 处理删除

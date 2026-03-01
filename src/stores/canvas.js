@@ -235,7 +235,8 @@ const getDefaultNodeData = (type) => {
     case 'text':
       return {
         content: '',
-        label: '文本输入'
+        label: '文本输入',
+        publicProps: {}  // 公共属性（可被 @ 引用）
       }
     case 'imageConfig': {
       const imageModel = IMAGE_MODELS.find(m => m.key === DEFAULT_IMAGE_MODEL) || IMAGE_MODELS[0]
@@ -266,7 +267,8 @@ const getDefaultNodeData = (type) => {
     case 'image':
       return {
         url: '',
-        label: '图片节点'
+        label: '图片节点',
+        publicProps: { name: '图片' }  // 公共属性（可被 @ 引用）
       }
     case 'llmConfig':
       return {
@@ -274,7 +276,8 @@ const getDefaultNodeData = (type) => {
         model: DEFAULT_CHAT_MODEL,
         outputFormat: 'text',
         outputContent: '',
-        label: 'LLM文本生成'
+        label: 'LLM文本生成',
+        publicProps: {}  // 公共属性（可被 @ 引用）
       }
     default:
       return {}

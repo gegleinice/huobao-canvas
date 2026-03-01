@@ -8,7 +8,39 @@
       <!-- Header | 头部 -->
       <div class="px-3 py-2 border-b border-[var(--border-color)]">
         <div class="flex items-center justify-between">
-          <span class="text-sm font-medium text-[var(--text-primary)]">{{ data.label || '图像生成结果' }}</span>
+          <div class="flex items-center gap-2">
+            <span
+              v-if="!isEditingLabel"
+              @dblclick="startEditLabel"
+              class="text-sm font-medium text-[var(--text-primary)] cursor-text hover:bg-[var(--bg-tertiary)] px-1 rounded transition-colors"
+              title="双击编辑名称"
+            >{{ data.label || '图像生成结果' }}</span>
+            <input
+              v-else
+              ref="labelInputRef"
+              v-model="editingLabelValue"
+              @blur="finishEditLabel"
+              @keydown.enter="finishEditLabel"
+              @keydown.escape="cancelEditLabel"
+              class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-primary)] px-1 rounded outline-none border border-blue-500"
+            />
+            <!-- Public switch | 公开开关 -->
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button
+                  class="flex items-center"
+                  title="设置公开（可被 @ 引用）"
+                >
+                  <n-switch
+                    :value="isPublic"
+                    @update:value="handleTogglePublic"
+                    size="small"
+                  />
+                </button>
+              </template>
+              {{ isPublic ? '已公开: ' + (data.label || '图片') : '点击公开（可被 @ 引用）' }}
+            </n-tooltip>
+          </div>
           <div class="flex items-center gap-1">
             <n-tooltip v-if="data.url" trigger="hover">
               <template #trigger>
@@ -216,10 +248,16 @@
       </div>
 
       <!-- Handles | 连接点 -->
-      <NodeHandleMenu :nodeId="id" nodeType="image" :visible="showHandleMenu" />
+      <NodeHandleMenu :nodeId="id" nodeType="image" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
     </div>
   </div>
+
+  <!-- Image preview dialog | 图片预览弹窗 -->
+  <n-image-preview
+    v-model:show="showRef"
+    :src="props.data?.url"
+  />
 </template>
 
 <script setup>
@@ -227,9 +265,9 @@
  * Image node component | 图片节点组件
  * Displays and manages image content with loading state
  */
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { NIcon, NTooltip } from 'naive-ui'
+import { NIcon, NTooltip, NSwitch, NImagePreview } from 'naive-ui'
 import { TrashOutline, ExpandOutline, ImageOutline, CloseCircleOutline, CopyOutline, VideocamOutline, DownloadOutline, EyeOutline, BrushOutline, RefreshOutline, ColorWandOutline } from '@vicons/ionicons5'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
@@ -246,6 +284,11 @@ const { updateNodeInternals } = useVueFlow()
 const showActions = ref(true)
 const showHandleMenu = ref(false)
 
+// Label editing state | Label 编辑状态
+const isEditingLabel = ref(false)
+const editingLabelValue = ref('')
+const labelInputRef = ref(null)
+
 // URL input state | URL 输入状态
 const urlInput = ref('')
 const urlLoading = ref(false)
@@ -259,6 +302,109 @@ const imageContainerRef = ref(null)
 const interactionLayerRef = ref(null)
 const brushCursor = ref({ x: 0, y: 0, visible: false })
 const maskData = ref(null)
+
+
+// Computed public props status | 计算是否公开
+const isPublic = computed(() => {
+  return props.data?.publicProps?.name != null && props.data?.publicProps?.name !== ''
+})
+
+// Handle toggle public | 处理切换公开状态
+const handleTogglePublic = (value) => {
+  if (value) {
+    // 公开：使用节点名称
+    const name = props.data?.label || '图片'
+    updateNode(props.id, {
+      publicProps: { name }
+    })
+  } else {
+    // 取消公开
+    updateNode(props.id, {
+      publicProps: {}
+    })
+  }
+}
+
+// Image node menu operations | 图片节点菜单操作
+const operations = [
+  { type: 'imageConfig', label: '图生图', icon: ImageOutline, action: 'image_imageConfig' },
+  { type: 'videoConfig', label: '生视频', icon: VideocamOutline, action: 'image_videoConfig' }
+]
+
+// Handle menu select | 处理菜单选择
+const handleSelect = (item) => {
+  const action = item.action
+
+  if (action === 'image_imageConfig') {
+    // Image-to-image workflow | 图生图工作流
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const nodeX = currentNode?.position?.x || 0
+    const nodeY = currentNode?.position?.y || 0
+    const sourceUrl = currentNode?.data?.url
+
+    if (!sourceUrl) {
+      window.$message?.warning('当前图片节点没有图片')
+      return
+    }
+
+    // Create text node for prompt
+    const textNodeId = addNode('text', { x: nodeX + 300, y: nodeY - 100 }, {
+      content: '',
+      label: '提示词'
+    })
+
+    // Create imageConfig node
+    const configNodeId = addNode('imageConfig', { x: nodeX + 900, y: nodeY }, {
+      model: 'doubao-seedream-4-5-251128',
+      size: '2048x2048',
+      label: '生图配置'
+    })
+
+    // Connect edges
+    addEdge({ source: props.id, target: configNodeId, sourceHandle: 'right', targetHandle: 'left' })
+    addEdge({ source: textNodeId, target: configNodeId, sourceHandle: 'right', targetHandle: 'left' })
+
+    setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
+    window.$message?.success('已创建图生图工作流')
+  } else if (action === 'image_videoConfig') {
+    // Video generation workflow | 视频生成工作流
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const nodeX = currentNode?.position?.x || 0
+    const nodeY = currentNode?.position?.y || 0
+
+    // Create text node for prompt
+    const textNodeId = addNode('text', { x: nodeX + 300, y: nodeY - 100 }, {
+      content: '',
+      label: '提示词'
+    })
+
+    // Create videoConfig node
+    const configNodeId = addNode('videoConfig', { x: nodeX + 600, y: nodeY }, {
+      label: '视频生成'
+    })
+
+    // Connect image to videoConfig
+    addEdge({
+      source: props.id,
+      target: configNodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left',
+      type: 'imageRole',
+      data: { imageRole: 'first_frame_image' }
+    })
+
+    // Connect text to videoConfig
+    addEdge({
+      source: textNodeId,
+      target: configNodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left'
+    })
+
+    setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
+    window.$message?.success('已创建视频生成工作流')
+  }
+}
 
 // Toggle inpaint mode | 切换涂抹模式
 const toggleInpaintMode = () => {
@@ -523,6 +669,30 @@ const handleUrlSubmit = () => {
   img.src = url
 }
 
+// Start editing label | 开始编辑 label
+const startEditLabel = () => {
+  editingLabelValue.value = props.data?.label || '图像生成结果'
+  isEditingLabel.value = true
+  nextTick(() => {
+    labelInputRef.value?.focus()
+    labelInputRef.value?.select()
+  })
+}
+
+// Finish editing label | 完成编辑 label
+const finishEditLabel = () => {
+  const newLabel = editingLabelValue.value.trim()
+  if (newLabel && newLabel !== props.data?.label) {
+    updateNode(props.id, { label: newLabel })
+  }
+  isEditingLabel.value = false
+}
+
+// Cancel editing label | 取消编辑 label
+const cancelEditLabel = () => {
+  isEditingLabel.value = false
+}
+
 // Handle delete | 处理删除
 const handleDelete = () => {
   removeNode(props.id)
@@ -542,7 +712,7 @@ const handleDuplicate = () => {
   }
 }
 
-// Handle image generation | 处理图片生图
+// Handle image generation | 处理图片生图（图生图）
 const handleImageGen = () => {
   const currentNode = nodes.value.find(n => n.id === props.id)
   const nodeX = currentNode?.position?.x || 0
@@ -554,16 +724,31 @@ const handleImageGen = () => {
     label: '提示词'
   })
 
-  // Create imageConfig node | 创建文生图配置节点
-  const configNodeId = addNode('imageConfig', { x: nodeX + 600, y: nodeY }, {
-    model: 'doubao-seedream-4-5-251128',
-    size: '2048x2048',
-    label: '图生图'
+  // Create ImageNode for editing | 创建图片编辑节点
+  const imageNodeId = addNode('image', { x: nodeX + 600, y: nodeY }, {
+    url: props.data.url,  // Pass the current image as input
+    label: '图生图',
+    refImage: props.data.url  // Mark as reference image
   })
 
-  // Connect image node to config node | 连接图片节点到配置节点
+  // Create imageConfig node for generation | 创建生图配置节点
+  const configNodeId = addNode('imageConfig', { x: nodeX + 900, y: nodeY }, {
+    model: 'doubao-seedream-4-5-251128',
+    size: '2048x2048',
+    label: '生图配置'
+  })
+
+  // Connect image node to new image node | 连接当前图片节点到新图片节点
   addEdge({
     source: props.id,
+    target: imageNodeId,
+    sourceHandle: 'right',
+    targetHandle: 'left'
+  })
+
+  // Connect new image node to config node | 连接新图片节点到配置节点
+  addEdge({
+    source: imageNodeId,
     target: configNodeId,
     sourceHandle: 'right',
     targetHandle: 'left'
@@ -579,14 +764,19 @@ const handleImageGen = () => {
 
   // Force Vue Flow to recalculate node dimensions | 强制 Vue Flow 重新计算节点尺寸
   setTimeout(() => {
-    updateNodeInternals([textNodeId, configNodeId])
+    updateNodeInternals([textNodeId, imageNodeId, configNodeId])
   }, 50)
+
+  window.$message?.success('已创建图生图工作流')
 }
+
+// Preview state | 预览状态
+const showRef = ref(false)
 
 // Handle preview | 处理预览
 const handlePreview = () => {
   if (props.data.url) {
-    window.open(props.data.url, '_blank')
+    showRef.value = true
   }
 }
 
