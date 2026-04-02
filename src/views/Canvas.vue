@@ -46,6 +46,8 @@
         :node-types="nodeTypes"
         :edge-types="edgeTypes"
         :default-viewport="canvasViewport"
+        :default-edge-options="defaultEdgeOptions"
+        :connection-line-options="connectionLineOptions"
         :min-zoom="0.1"
         :max-zoom="2"
         :snap-to-grid="true"
@@ -57,7 +59,13 @@
         @edges-change="onEdgesChange"
         class="canvas-flow"
       >
-        <Background v-if="showGrid" :gap="20" :size="1" />
+        <Background
+          v-if="showGrid"
+          variant="dots"
+          :gap="22"
+          :size="1.2"
+          pattern-color="rgba(255,255,255,0.07)"
+        />
         <MiniMap 
           v-if="!isMobile"
           position="bottom-right"
@@ -65,6 +73,68 @@
           :zoomable="true"
         />
       </VueFlow>
+
+      <!-- Center hint — double-click to create | 中央提示 -->
+      <div
+        class="pointer-events-none absolute left-1/2 top-[18%] z-[5] -translate-x-1/2 select-none"
+        aria-hidden="true"
+      >
+        <div
+          class="pointer-events-auto flex items-center gap-0.5 rounded-full border border-white/[0.12] bg-[rgba(18,18,18,0.72)] px-1 py-1 shadow-lg backdrop-blur-xl"
+        >
+          <span
+            class="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-medium tracking-wide text-white/85"
+          >
+            <n-icon :size="14" class="text-[var(--accent-color)]"><SparklesOutline /></n-icon>
+            双击
+          </span>
+          <span class="pr-4 pl-1 text-[11px] tracking-wide text-white/45">
+            画布添加节点，或打开左侧「+」与模板
+          </span>
+        </div>
+      </div>
+
+      <!-- Double-click add-node palette | 双击添加节点面板 -->
+      <Teleport to="body">
+        <div
+          v-if="dblClickPalette.open"
+          class="fixed inset-0 z-[100] bg-transparent"
+          @click.self="closeDblClickPalette"
+        >
+          <div
+            class="nodrag nopan canvas-dbl-palette absolute z-[101] w-[min(280px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-white/[0.1] bg-[rgba(28,28,28,0.94)] py-2 shadow-2xl backdrop-blur-2xl"
+            :style="dblClickPaletteStyle"
+            @click.stop
+          >
+            <p class="px-3 pb-2 text-[10px] font-medium uppercase tracking-wider text-white/35">
+              添加节点
+            </p>
+            <button
+              v-for="opt in dblClickNodeOptions"
+              :key="opt.type"
+              type="button"
+              class="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.06]"
+              @click="addNodeFromDblPalette(opt.type)"
+            >
+              <span
+                class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]"
+              >
+                <n-icon :size="18" :color="opt.color"><component :is="opt.icon" /></n-icon>
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="flex items-center gap-2 text-sm text-white/90">
+                  {{ opt.name }}
+                  <span
+                    v-if="opt.badge"
+                    class="rounded-full bg-white/10 px-1.5 py-px text-[9px] font-medium text-white/50"
+                  >{{ opt.badge }}</span>
+                </span>
+                <span class="mt-0.5 block text-[11px] leading-snug text-white/40">{{ opt.hint }}</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- Left toolbar -->
       <aside class="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-1 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] shadow-[var(--card-shadow)] z-10">
@@ -168,6 +238,14 @@
                   >
                     AI 润色
                   </button>
+                  <button 
+                    @click="handleReflectEvolve"
+                    :disabled="isProcessing || !reflectTargetNode"
+                    class="px-3 py-1.5 text-[11px] font-medium tracking-wide rounded-full border border-white/[0.1] bg-white/[0.04] text-[var(--text-muted)] hover:border-[var(--accent-color)]/35 hover:text-[var(--accent-color)] transition-all duration-300 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="根据下游节点上下文，进化选中节点的提示词"
+                  >
+                    反思进化
+                  </button>
                 </div>
                 <div class="flex items-center gap-3">
                   <label class="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
@@ -238,7 +316,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, watch, nextTick, markRaw } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, ConnectionLineType } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { NIcon, NSwitch, NDropdown, NMessageProvider, NSpin, NModal, NInput, NButton } from 'naive-ui'
@@ -261,7 +339,8 @@ import {
   RemoveOutline,
   DownloadOutline,
   AppsOutline,
-  ChatbubbleOutline
+  ChatbubbleOutline,
+  SparklesOutline
 } from '@vicons/ionicons5'
 import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
@@ -312,6 +391,22 @@ const {
   model: CHAT_TEMPLATES.imagePrompt.model
 })
 
+// Self-reflect / evolve selected node prompt | 选中节点的反思进化（独立会话，避免污染润色上下文）
+const REFLECT_SYSTEM_PROMPT =
+  '你是 AIGC 画布上的「自我反思」顾问。用户会提供当前提示词或系统指令，以及下游已连接节点的简要上下文。\n' +
+  '任务：\n' +
+  '1. 内省：提示词与下游目标是否一致、缺什么具体信息；\n' +
+  '2. 进化：输出一版更可执行、更贴合下游能力的最终文案。\n' +
+  '只输出进化后的正文，不要标题、引号或解释段落。'
+
+const {
+  send: sendReflect,
+  clear: clearReflectChat
+} = useChat({
+  systemPrompt: REFLECT_SYSTEM_PROMPT,
+  model: CHAT_TEMPLATES.imagePrompt.model
+})
+
 // Workflow orchestrator hook | 工作流编排 hook
 const {
   isAnalyzing: workflowAnalyzing,
@@ -341,7 +436,24 @@ const router = useRouter()
 const route = useRoute()
 
 // Vue Flow instance | Vue Flow 实例
-const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals } = useVueFlow()
+const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals, project } = useVueFlow()
+
+// Default edge + connection line — smooth curves | 默认边与拖拽连线样式
+const defaultEdgeOptions = {
+  type: 'smoothstep',
+  style: {
+    stroke: 'rgba(210, 210, 220, 0.38)',
+    strokeWidth: 1.75
+  }
+}
+
+const connectionLineOptions = {
+  type: ConnectionLineType.SmoothStep,
+  style: {
+    stroke: 'rgba(200, 168, 85, 0.45)',
+    strokeWidth: 2
+  }
+}
 
 // Register custom node types | 注册自定义节点类型
 const nodeTypes = {
@@ -420,6 +532,91 @@ const nodeTypeOptions = [
   { type: 'video', name: '视频节点', icon: VideocamOutline, color: '#ef4444' }
 ]
 
+// Double-click palette rows (with hints, reference UI) | 双击面板的节点项
+const dblClickNodeOptions = [
+  { type: 'text', name: '文本', icon: TextOutline, color: '#93c5fd', hint: '提示词、脚本、说明', badge: null },
+  { type: 'image', name: '图片', icon: ImageOutline, color: '#c4b5fd', hint: '占位或引用素材', badge: null },
+  { type: 'video', name: '视频', icon: VideocamOutline, color: '#fca5a5', hint: '成片或预览节点', badge: null },
+  { type: 'imageConfig', name: '文生图', icon: ColorPaletteOutline, color: '#86efac', hint: '配置模型与画幅', badge: null },
+  { type: 'videoConfig', name: '视频生成', icon: VideocamOutline, color: '#fcd34d', hint: '图生视频、首帧等', badge: null },
+  { type: 'llmConfig', name: 'LLM 生成', icon: ChatbubbleOutline, color: '#d8b4fe', hint: '结构化文本输出', badge: 'Beta' }
+]
+
+// Double-click detection on pane | 画布双击检测
+const dblClickPalette = ref({
+  open: false,
+  screenX: 0,
+  screenY: 0,
+  flowX: 0,
+  flowY: 0
+})
+let paneLastClickAt = 0
+let paneLastFlowX = 0
+let paneLastFlowY = 0
+const DOUBLE_TAP_MS = 380
+const DOUBLE_TAP_FLOW_DIST = 48
+
+const dblClickPaletteStyle = computed(() => {
+  const w = 280
+  const h = 320
+  const x = Math.min(Math.max(12, dblClickPalette.value.screenX - w / 2), window.innerWidth - w - 12)
+  const y = Math.min(Math.max(12, dblClickPalette.value.screenY - 8), window.innerHeight - h - 12)
+  return { left: `${x}px`, top: `${y}px` }
+})
+
+const closeDblClickPalette = () => {
+  dblClickPalette.value.open = false
+}
+
+const openDblClickPalette = (screenX, screenY, flow) => {
+  dblClickPalette.value = {
+    open: true,
+    screenX,
+    screenY,
+    flowX: flow.x,
+    flowY: flow.y
+  }
+  showNodeMenu.value = false
+}
+
+const addNodeFromDblPalette = (type) => {
+  const { flowX, flowY } = dblClickPalette.value
+  closeDblClickPalette()
+  addNewNodeAt(type, { x: flowX, y: flowY })
+}
+
+/** Summarize downstream nodes for reflect | 下游上下文摘要 */
+const buildDownstreamSummary = (sourceId) => {
+  const outs = edges.value.filter(e => e.source === sourceId)
+  if (!outs.length) return '（当前无出线连接，仅根据文案本身进化）'
+  const lines = []
+  for (const e of outs) {
+    const t = nodes.value.find(n => n.id === e.target)
+    if (!t) continue
+    const label = t.data?.label || t.type
+    if (t.type === 'imageConfig') {
+      lines.push(`→ 文生图「${label}」模型 ${t.data?.model || '—'}，尺寸 ${t.data?.size || '—'}`)
+    } else if (t.type === 'videoConfig') {
+      lines.push(`→ 视频配置「${label}」比例 ${t.data?.ratio || '—'} 时长 ${t.data?.duration ?? '—'}s`)
+    } else if (t.type === 'image' && t.data?.url) {
+      lines.push(`→ 图片节点「${label}」已有一张输出图`)
+    } else if (t.type === 'video' && t.data?.url) {
+      lines.push(`→ 视频节点「${label}」已有成片`)
+    } else if (t.type === 'llmConfig') {
+      lines.push(`→ LLM 节点「${label}」`)
+    } else {
+      lines.push(`→ ${t.type}「${label}」`)
+    }
+  }
+  return lines.join('\n')
+}
+
+/** First selected node that can evolve | 可选中并参与反思的节点 */
+const reflectTargetNode = computed(() => {
+  const sel = nodes.value.filter(n => n.selected)
+  return sel.find(n => n.type === 'text' || n.type === 'llmConfig') || null
+})
+
 // Input placeholder | 输入占位符
 const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡通角色"'
 
@@ -431,25 +628,23 @@ const suggestions = [
   '夏日田野环绕漫步'
 ]
 
-// Add new node | 添加新节点
-const addNewNode = async (type) => {
-  // Calculate viewport center position | 计算视口中心位置
-  const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
-  const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
-  
-  // Add node at viewport center | 在视口中心添加节点
-  const nodeId = addNode(type, { x: viewportCenterX - 100, y: viewportCenterY - 100 })
-  
-  // Set highest z-index | 设置最高层级
+// Add new node at flow coordinates (centered on point) | 在指定流坐标添加节点
+const addNewNodeAt = async (type, flowPoint) => {
+  const nodeId = addNode(type, {
+    x: flowPoint.x - 100,
+    y: flowPoint.y - 70
+  })
   const maxZIndex = Math.max(0, ...nodes.value.map(n => n.zIndex || 0))
   updateNode(nodeId, { zIndex: maxZIndex + 1 })
-  
-  // Force Vue Flow to recalculate node dimensions | 强制 Vue Flow 重新计算节点尺寸
-  setTimeout(() => {
-    updateNodeInternals(nodeId)
-  }, 50)
-  
+  setTimeout(() => updateNodeInternals(nodeId), 50)
   showNodeMenu.value = false
+}
+
+// Add new node | 添加新节点（视口中心）
+const addNewNode = async (type) => {
+  const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
+  const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
+  await addNewNodeAt(type, { x: viewportCenterX, y: viewportCenterY })
 }
 
 // Handle add workflow from panel | 处理从面板添加工作流
@@ -619,14 +814,22 @@ const onEdgesChange = (changes) => {
   }
 }
 
-// Handle pane click | 处理画布点击
-const onPaneClick = () => {
+// Handle pane click | 处理画布点击（含双击打开添加面板）
+const onPaneClick = (event) => {
+  const flow = project({ x: event.clientX, y: event.clientY })
+  const now = Date.now()
+  const dt = now - paneLastClickAt
+  const dist = Math.hypot(flow.x - paneLastFlowX, flow.y - paneLastFlowY)
+  if (dt < DOUBLE_TAP_MS && dist < DOUBLE_TAP_FLOW_DIST) {
+    paneLastClickAt = 0
+    openDblClickPalette(event.clientX, event.clientY, flow)
+    return
+  }
+  paneLastClickAt = now
+  paneLastFlowX = flow.x
+  paneLastFlowY = flow.y
   showNodeMenu.value = false
-  // Clear all selections | 清除所有选中
-  // nodes.value = nodes.value.map(node => ({
-  //   ...node,
-  //   selected: false
-  // }))
+  closeDblClickPalette()
 }
 
 // Handle project action | 处理项目操作
@@ -669,6 +872,50 @@ const confirmDelete = () => {
 const handleEnterKey = (e) => {
   e.preventDefault()
   sendMessage()
+}
+
+// Reflect / evolve selected text or LLM node | 反思进化选中节点
+const handleReflectEvolve = async () => {
+  const node = reflectTargetNode.value
+  if (!node) {
+    window.$message?.warning('请先选中一个「文本」或「LLM」节点')
+    return
+  }
+  if (!isApiConfigured.value) {
+    window.$message?.warning('请先配置 API Key')
+    showApiSettings.value = true
+    return
+  }
+
+  let body = ''
+  if (node.type === 'text') body = (node.data?.content || '').trim()
+  if (node.type === 'llmConfig') body = (node.data?.systemPrompt || '').trim()
+
+  if (!body) {
+    window.$message?.warning('节点内暂无可用文案')
+    return
+  }
+
+  isProcessing.value = true
+  try {
+    clearReflectChat()
+    const ctx = buildDownstreamSummary(node.id)
+    const payload = `【当前内容】\n${body}\n\n【下游上下文】\n${ctx}`
+    const result = await sendReflect(payload, true)
+    if (result) {
+      if (node.type === 'text') {
+        updateNode(node.id, { content: result })
+      } else {
+        updateNode(node.id, { systemPrompt: result })
+      }
+      setTimeout(() => updateNodeInternals(node.id), 30)
+      window.$message?.success('已根据上下文完成反思进化')
+    }
+  } catch (err) {
+    window.$message?.error(err.message || '反思进化失败')
+  } finally {
+    isProcessing.value = false
+  }
 }
 
 // Handle AI polish | 处理 AI 润色
@@ -819,10 +1066,18 @@ watch(
   }
 )
 
+const onGlobalKeydown = (e) => {
+  if (e.key === 'Escape') {
+    closeDblClickPalette()
+    showNodeMenu.value = false
+  }
+}
+
 // Initialize | 初始化
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  window.addEventListener('keydown', onGlobalKeydown)
   
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
@@ -845,6 +1100,7 @@ onMounted(() => {
 // Cleanup on unmount | 卸载时清理
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('keydown', onGlobalKeydown)
   // Save project before leaving | 离开前保存项目
   saveProject()
 })

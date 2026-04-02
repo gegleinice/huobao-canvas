@@ -79,6 +79,22 @@ body {
 .vue-flow__edge-path {
   stroke: var(--border-color);
   stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-opacity 0.2s var(--timing-smooth), stroke 0.2s var(--timing-smooth);
+}
+
+.vue-flow__edge:hover .vue-flow__edge-path {
+  stroke: rgba(255, 255, 255, 0.28);
+}
+
+.vue-flow__edge.selected .vue-flow__edge-path {
+  stroke: rgba(200, 168, 85, 0.55);
+}
+
+.vue-flow__connection-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .vue-flow__handle {
