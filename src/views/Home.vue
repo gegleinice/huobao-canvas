@@ -1,189 +1,227 @@
 <template>
-  <!-- Home page | 首页 -->
-  <div class="min-h-screen h-screen overflow-y-auto bg-[var(--bg-primary)]">
-    <!-- Header | 顶部导航 -->
-    <AppHeader>
-      <template #right>
-        <button 
-          @click="showApiSettings = true"
-          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-          :class="{ 'text-[var(--accent-color)]': isApiConfigured }"
-          title="API 设置"
-        >
-          <n-icon :size="20"><SettingsOutline /></n-icon>
-        </button>
-      </template>
-    </AppHeader>
+  <div class="min-h-[100dvh] h-screen overflow-y-auto bg-[#050505]">
+    <!-- Minimal Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 md:px-12 py-5">
+      <div class="flex items-center gap-3">
+        <img src="../assets/logo.png" alt="Logo" class="w-8 h-8" />
+        <span class="text-[15px] font-semibold text-white tracking-tight">臭鼬AIGC</span>
+      </div>
+      <button 
+        @click="showApiSettings = true"
+        class="p-2 rounded-xl transition-all duration-300"
+        :class="isApiConfigured ? 'text-[#c8a855] hover:bg-[#c8a855]/10' : 'text-[#444] hover:bg-white/5'"
+        title="API 设置"
+      >
+        <n-icon :size="18"><SettingsOutline /></n-icon>
+      </button>
+    </header>
 
-    <!-- Main content | 主要内容 -->
-    <main class="max-w-5xl mx-auto px-4 py-8 md:py-16">
-      <!-- Welcome section | 欢迎区域 -->
-      <section class="text-center mb-12">
-        <div class="flex items-center justify-center gap-4 mb-8">
-          <img src="../assets/logo.png" alt="Logo" class="w-12 h-12 md:w-16 md:h-16" />
-          <h1 class="text-2xl md:text-4xl font-bold text-[var(--text-primary)]">欢迎来到火宝无限画布</h1>
+    <main>
+      <!-- Hero Section — TapNow style left-aligned -->
+      <section class="px-8 md:px-12 pt-28 md:pt-36 pb-12 md:pb-16 max-w-6xl animate-fade-up">
+        <h1 class="text-[clamp(2.5rem,6vw,4.5rem)] font-extrabold text-white leading-[1.05] tracking-tighter max-w-3xl">
+          你的 AI 原生<br/>创意画布
+        </h1>
+        <p class="mt-6 text-lg md:text-xl text-[#888] max-w-xl leading-relaxed italic">
+          统一调度文生图、图生视频与 AI 模型，在无限画布上节点式编排，零摩擦创作。
+        </p>
+        <div class="flex items-center gap-4 mt-10 animate-fade-up-delay-1">
+          <button 
+            @click="createNewProject"
+            class="px-7 py-3.5 text-[15px] font-semibold rounded-full bg-white text-[#050505] hover:bg-[#e8e8e8] transition-all duration-300 ease-smooth active:scale-[0.97]"
+          >
+            开始创作
+          </button>
+          <button 
+            @click="scrollToProjects"
+            class="px-6 py-3.5 text-[15px] font-medium rounded-full border border-[#333] text-[#999] hover:border-[#555] hover:text-white transition-all duration-300 ease-smooth"
+          >
+            我的项目
+          </button>
         </div>
-        
-        <!-- Input area | 输入区域 -->
-        <div class="max-w-2xl mx-auto">
-          <div class="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] p-4 shadow-sm">
-            <textarea
-              v-model="inputText"
-              placeholder="输入你的创意，开始新项目"
-              class="w-full bg-transparent resize-none outline-none text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] min-h-[80px]"
-              @keydown.enter.ctrl="handleCreateWithInput"
-            />
-            <div class="flex items-center justify-between mt-2">
-              <div class="flex items-center gap-2">
-                <!-- <button class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors">
-                  <n-icon :size="18"><AddOutline /></n-icon>
-                </button>
-                <button class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors">
-                  <n-icon :size="18"><ImageOutline /></n-icon>
-                </button> -->
+      </section>
+
+      <!-- Showcase — Canvas preview card -->
+      <section class="px-8 md:px-12 pb-20 md:pb-28 animate-fade-up-delay-1">
+        <div class="max-w-5xl">
+          <div class="p-[1px] rounded-3xl bg-gradient-to-b from-[rgba(255,255,255,0.08)] via-[rgba(255,255,255,0.02)] to-transparent">
+            <div class="rounded-3xl bg-[#0c0c0c] p-6 md:p-8 relative overflow-hidden min-h-[320px] md:min-h-[420px]">
+              <!-- Grid dots background -->
+              <div class="absolute inset-0 opacity-[0.03]" style="background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 24px 24px;"></div>
+              
+              <!-- Floating elements simulating canvas nodes -->
+              <div class="relative z-10 flex flex-col md:flex-row gap-6 items-start">
+                <!-- Input card -->
+                <div class="w-full md:w-[280px] shrink-0 animate-fade-up-delay-2">
+                  <div class="rounded-2xl bg-[#111] border border-[#1e1e1e] p-4">
+                    <div class="text-[11px] uppercase tracking-[0.15em] text-[#555] mb-3">创意输入</div>
+                    <textarea
+                      v-model="inputText"
+                      placeholder="描述你想要创作的画面..."
+                      class="w-full bg-transparent resize-none outline-none text-[14px] text-[#ccc] placeholder:text-[#333] min-h-[80px] leading-relaxed"
+                      @keydown.enter.ctrl="handleCreateWithInput"
+                    />
+                    <div class="flex items-center justify-between mt-3 pt-3 border-t border-[#1a1a1a]">
+                      <div class="flex gap-1.5">
+                        <button 
+                          v-for="tag in suggestions.slice(0, 2)" 
+                          :key="tag"
+                          @click="inputText = tag"
+                          class="px-2.5 py-1 text-[10px] tracking-wide rounded-full border border-[#222] text-[#555] hover:border-[#c8a855] hover:text-[#c8a855] transition-all duration-300"
+                        >
+                          {{ tag }}
+                        </button>
+                      </div>
+                      <button 
+                        @click="handleCreateWithInput"
+                        class="w-8 h-8 rounded-xl bg-[#c8a855] hover:bg-[#b8972e] flex items-center justify-center transition-all duration-300 active:scale-95"
+                      >
+                        <n-icon :size="14" color="#050505"><SendOutline /></n-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Decorative connection line -->
+                <div class="hidden md:flex items-center self-center">
+                  <div class="w-12 h-[1px] bg-gradient-to-r from-[#333] to-[#1a1a1a]"></div>
+                  <div class="w-2 h-2 rounded-full bg-[#c8a855] shadow-[0_0_8px_rgba(200,168,85,0.4)]"></div>
+                  <div class="w-12 h-[1px] bg-gradient-to-r from-[#1a1a1a] to-[#333]"></div>
+                </div>
+
+                <!-- Output preview cards -->
+                <div class="flex-1 grid grid-cols-2 gap-3 animate-fade-up-delay-3">
+                  <div class="rounded-xl bg-[#111] border border-[#1e1e1e] p-3 aspect-square flex flex-col justify-between">
+                    <div class="text-[10px] uppercase tracking-[0.15em] text-[#555]">文生图</div>
+                    <div class="flex-1 rounded-lg bg-gradient-to-br from-[#1a1510] via-[#0f0f0f] to-[#10151a] mt-2 flex items-center justify-center">
+                      <n-icon :size="20" class="text-[#333]"><ImageOutline /></n-icon>
+                    </div>
+                  </div>
+                  <div class="rounded-xl bg-[#111] border border-[#1e1e1e] p-3 aspect-square flex flex-col justify-between">
+                    <div class="text-[10px] uppercase tracking-[0.15em] text-[#555]">图生视频</div>
+                    <div class="flex-1 rounded-lg bg-gradient-to-br from-[#15101a] via-[#0f0f0f] to-[#1a1510] mt-2 flex items-center justify-center">
+                      <n-icon :size="20" class="text-[#333]"><VideocamOutline /></n-icon>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="flex items-center gap-3">
-                <button 
-                  @click="handleCreateWithInput"
-                  class="w-8 h-8 rounded-xl bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition-colors"
-                >
-                  <n-icon :size="20" color="white"><SendOutline /></n-icon>
-                </button>
-              </div>
+
+              <!-- Ambient glow -->
+              <div class="absolute -bottom-20 left-1/3 w-64 h-64 bg-[#c8a855] opacity-[0.03] blur-[100px] rounded-full"></div>
+              <div class="absolute -top-20 right-1/4 w-48 h-48 bg-[#5588cc] opacity-[0.02] blur-[80px] rounded-full"></div>
             </div>
-          </div>
-          
-          <!-- Quick suggestions | 快捷建议 -->
-          <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
-            <span class="text-sm text-[var(--text-secondary)]">推荐：</span>
-            <button 
-              v-for="tag in suggestions" 
-              :key="tag"
-              @click="inputText = tag"
-              class="px-3 py-1.5 text-sm rounded-full bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--accent-color)] transition-colors"
-            >
-              {{ tag }}
-            </button>
-            <button class="p-1.5 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors">
-              <n-icon :size="16"><RefreshOutline /></n-icon>
-            </button>
           </div>
         </div>
       </section>
 
-      <!-- My projects section | 我的项目区域 -->
-      <section ref="projectsSection">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)]">我的项目</h2>
+      <!-- Features strip -->
+      <section class="px-8 md:px-12 pb-16 md:pb-24 animate-fade-up-delay-3">
+        <div class="max-w-5xl flex flex-wrap gap-3">
+          <div v-for="feature in features" :key="feature" class="px-4 py-2 rounded-full border border-[#1a1a1a] bg-[#0a0a0a] text-[12px] text-[#666] tracking-wide">
+            {{ feature }}
+          </div>
+        </div>
+      </section>
+
+      <!-- Divider -->
+      <div class="max-w-5xl mx-8 md:mx-12 h-[1px] bg-gradient-to-r from-transparent via-[#1a1a1a] to-transparent"></div>
+
+      <!-- Projects Section -->
+      <section ref="projectsSection" class="px-8 md:px-12 py-16 md:py-24 max-w-6xl">
+        <div class="flex items-center justify-between mb-10">
+          <h2 class="text-sm font-medium text-[#666] uppercase tracking-[0.2em]">我的项目</h2>
           <button 
             @click="createNewProject"
-            class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white transition-colors"
+            class="flex items-center gap-1.5 px-4 py-2 text-[12px] font-medium tracking-wide rounded-full bg-white text-[#050505] hover:bg-[#e8e8e8] transition-all duration-300 ease-smooth active:scale-[0.97]"
           >
-            <n-icon :size="16"><AddOutline /></n-icon>
+            <n-icon :size="12"><AddOutline /></n-icon>
             新建项目
           </button>
         </div>
         
-        <!-- Empty state | 空状态 -->
-        <div v-if="projects.length === 0" class="text-center py-12 bg-[var(--bg-secondary)] rounded-xl border border-dashed border-[var(--border-color)]">
-          <n-icon :size="48" class="text-[var(--text-secondary)] mb-4"><FolderOutline /></n-icon>
-          <p class="text-[var(--text-secondary)] mb-4">还没有项目，创建一个开始吧</p>
+        <!-- Empty state -->
+        <div v-if="projects.length === 0" class="py-24 rounded-3xl border border-dashed border-[#1a1a1a] flex flex-col items-center">
+          <div class="w-12 h-12 mb-6 rounded-2xl bg-[rgba(200,168,85,0.06)] flex items-center justify-center">
+            <n-icon :size="20" class="text-[#c8a855]"><FolderOutline /></n-icon>
+          </div>
+          <p class="text-[#444] mb-8 text-sm">开始你的第一次创作</p>
           <button 
             @click="createNewProject"
-            class="px-4 py-2 text-sm rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white transition-colors"
+            class="px-6 py-3 text-[13px] font-semibold rounded-full bg-white text-[#050505] hover:bg-[#e8e8e8] transition-all duration-300 ease-smooth active:scale-[0.97]"
           >
-            创建第一个项目
+            创建项目
           </button>
         </div>
         
-        <!-- Projects grid | 项目网格 -->
-        <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <!-- Grid -->
+        <div v-else class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <div 
-            v-for="project in projects" 
+            v-for="(project, idx) in projects" 
             :key="project.id"
             class="group relative"
           >
-            <!-- Project card | 项目卡片 -->
-            <div 
-              @click="openProject(project)"
-              class="cursor-pointer"
-            >
-              <div 
-                class="aspect-video rounded-xl overflow-hidden bg-[var(--bg-tertiary)] mb-2 border border-[var(--border-color)] relative"
-                @mouseenter="handleThumbnailHover(project, true)"
-                @mouseleave="handleThumbnailHover(project, false)"
-              >
-                <!-- Thumbnail or placeholder | 缩略图或占位 -->
-                <template v-if="project.thumbnail">
-                  <!-- Video thumbnail | 视频缩略图 -->
-                  <video 
-                    v-if="isVideoUrl(project.thumbnail)"
-                    :ref="el => setVideoRef(project.id, el)"
-                    :src="project.thumbnail"
-                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    muted
-                    loop
-                    playsinline
-                  />
-                  <!-- Image thumbnail | 图片缩略图 -->
-                  <img 
-                    v-else
-                    :src="project.thumbnail" 
-                    :alt="project.name"
-                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </template>
-                <div v-else class="w-full h-full flex items-center justify-center">
-                  <n-icon :size="32" class="text-[var(--text-secondary)]"><DocumentOutline /></n-icon>
-                </div>
-                
-                <!-- Hover overlay | 悬浮遮罩 -->
-                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <span class="text-white text-sm">打开项目</span>
+            <div @click="openProject(project)" class="cursor-pointer">
+              <div class="p-[1px] rounded-2xl bg-gradient-to-b from-[rgba(255,255,255,0.04)] to-transparent group-hover:from-[rgba(200,168,85,0.15)] transition-all duration-500 ease-smooth mb-3">
+                <div class="rounded-2xl bg-[#0c0c0c] overflow-hidden">
+                  <div 
+                    class="aspect-video bg-[#111] relative"
+                    @mouseenter="handleThumbnailHover(project, true)"
+                    @mouseleave="handleThumbnailHover(project, false)"
+                  >
+                    <template v-if="project.thumbnail">
+                      <video 
+                        v-if="isVideoUrl(project.thumbnail)"
+                        :ref="el => setVideoRef(project.id, el)"
+                        :src="project.thumbnail"
+                        class="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-smooth"
+                        muted loop playsinline
+                      />
+                      <img 
+                        v-else
+                        :src="project.thumbnail" 
+                        :alt="project.name"
+                        class="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-smooth"
+                      />
+                    </template>
+                    <div v-else class="w-full h-full flex items-center justify-center">
+                      <n-icon :size="22" class="text-[#222]"><DocumentOutline /></n-icon>
+                    </div>
+                    
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-500 ease-smooth flex items-center justify-center">
+                      <span class="text-white text-[12px] font-medium tracking-wider opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-300 ease-smooth">OPEN</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <p class="text-sm text-[var(--text-primary)] truncate">{{ project.name }}</p>
-              <p class="text-xs text-[var(--text-secondary)]">{{ formatDate(project.updatedAt) }}</p>
+              <p class="text-[13px] font-medium text-[#ccc] truncate">{{ project.name }}</p>
+              <p class="text-[11px] text-[#444] mt-0.5">{{ formatDate(project.updatedAt) }}</p>
             </div>
             
-            <!-- Project actions | 项目操作 -->
-            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10">
               <n-dropdown :options="getProjectActions(project)" @select="(key) => handleProjectAction(key, project)" placement="bottom-end">
                 <button 
                   @click.stop
-                  class="p-1.5 bg-white/90 dark:bg-gray-800/90 rounded-lg shadow hover:bg-white dark:hover:bg-gray-800 transition-colors"
+                  class="p-1.5 bg-black/60 backdrop-blur-md rounded-lg hover:bg-black/80 transition-all duration-200"
                 >
-                  <n-icon :size="16"><EllipsisHorizontalOutline /></n-icon>
+                  <n-icon :size="13" class="text-white/60"><EllipsisHorizontalOutline /></n-icon>
                 </button>
               </n-dropdown>
             </div>
           </div>
         </div>
       </section>
+
+      <!-- Footer -->
+      <footer class="px-8 md:px-12 py-8 border-t border-[#111]">
+        <div class="flex items-center justify-between max-w-6xl">
+          <span class="text-[11px] text-[#333] tracking-wide">臭鼬AIGC</span>
+          <span class="text-[11px] text-[#222]">Powered by AI</span>
+        </div>
+      </footer>
     </main>
 
-    <!-- Left sidebar | 左侧边栏 -->
-    <aside class="fixed left-4 top-1/2 -translate-y-1/2 hidden md:flex flex-col gap-2 p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-sm">
-      <button 
-        @click="createNewProject"
-        class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-        title="新建项目"
-      >
-        <n-icon :size="20"><DocumentOutline /></n-icon>
-      </button>
-      <button 
-        @click="scrollToProjects"
-        class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-        title="我的项目"
-      >
-        <n-icon :size="20"><FolderOutline /></n-icon>
-      </button>
-    </aside>
-
-    <!-- API Settings Modal | API 设置弹窗 -->
     <ApiSettings v-model:show="showApiSettings" @saved="refreshApiConfig" />
 
-    <!-- Rename modal | 重命名弹窗 -->
     <n-modal v-model:show="showRenameModal" preset="dialog" title="重命名项目">
       <n-input v-model:value="renameValue" placeholder="请输入项目名称" />
       <template #action>
@@ -195,10 +233,6 @@
 </template>
 
 <script setup>
-/**
- * Home view component | 首页视图组件
- * Entry point with project list and creation input
- */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NIcon, NDropdown, NModal, NInput, NButton, useDialog } from 'naive-ui'
@@ -213,7 +247,8 @@ import {
   CreateOutline,
   CopyOutline,
   SettingsOutline,
-  TrashOutline
+  TrashOutline,
+  VideocamOutline
 } from '@vicons/ionicons5'
 import { 
   projects, 
@@ -225,25 +260,18 @@ import {
 } from '../stores/projects'
 import { useModelStore } from '../stores/pinia'
 import ApiSettings from '../components/ApiSettings.vue'
-import AppHeader from '../components/AppHeader.vue'
 
 const router = useRouter()
 const dialog = useDialog()
 const modelStore = useModelStore()
 
-// API Settings state | API 设置状态
 const showApiSettings = ref(false)
 const isApiConfigured = computed(() => !!modelStore.currentApiKey)
 
-// Refresh API config state | 刷新 API 配置状态
-const refreshApiConfig = () => {
-  // 通过 computed 自动更新，不需要手动刷新
-}
+const refreshApiConfig = () => {}
 
-// Video refs for hover play | 视频引用用于悬停播放
 const videoRefs = new Map()
 
-// Set video ref | 设置视频引用
 const setVideoRef = (projectId, el) => {
   if (el) {
     videoRefs.set(projectId, el)
@@ -252,32 +280,24 @@ const setVideoRef = (projectId, el) => {
   }
 }
 
-// Handle thumbnail hover | 处理缩略图悬停
 const handleThumbnailHover = (project, isHovering) => {
   if (!isVideoUrl(project.thumbnail)) return
-  
   const video = videoRefs.get(project.id)
   if (!video) return
-  
   if (isHovering) {
-    video.play().catch(() => {
-      // Ignore play errors (e.g., autoplay policy)
-    })
+    video.play().catch(() => {})
   } else {
     video.pause()
-    video.currentTime = 0 // Reset to start
+    video.currentTime = 0
   }
 }
 
-// Input state | 输入状态
 const inputText = ref('')
 
-// Rename modal state | 重命名弹窗状态
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
 
-// Suggestions tags | 建议标签
 const suggestions = [
   '雨中魔法森林',
   '日式街面美食摄影',
@@ -285,26 +305,31 @@ const suggestions = [
   '雨天富声旁边花语'
 ]
 
-// Format date | 格式化日期
+const features = [
+  '文生图',
+  '图生视频',
+  'AI 提示词润色',
+  '多模型切换',
+  '节点式编排',
+  '无限画布',
+  '本地存储',
+  '撤销 / 重做'
+]
+
 const formatDate = (date) => {
   if (!date) return ''
   const d = new Date(date)
   const now = new Date()
   const diff = now - d
-  
-  // Less than 1 minute | 小于1分钟
   if (diff < 60000) return '刚刚'
-  // Less than 1 hour | 小于1小时
   if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
-  // Less than 1 day | 小于1天
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
-  // Less than 7 days | 小于7天
   if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
-  // Format as date | 格式化为日期
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-// Get project actions | 获取项目操作选项
+import { h } from 'vue'
+
 const getProjectActions = (project) => [
   { label: '重命名', key: 'rename', icon: () => h(NIcon, null, { default: () => h(CreateOutline) }) },
   { label: '复制', key: 'duplicate', icon: () => h(NIcon, null, { default: () => h(CopyOutline) }) },
@@ -312,7 +337,6 @@ const getProjectActions = (project) => [
   { label: '删除', key: 'delete', icon: () => h(NIcon, null, { default: () => h(TrashOutline) }) }
 ]
 
-// Handle project action | 处理项目操作
 const handleProjectAction = (key, project) => {
   switch (key) {
     case 'rename':
@@ -341,7 +365,6 @@ const handleProjectAction = (key, project) => {
   }
 }
 
-// Confirm rename | 确认重命名
 const confirmRename = () => {
   if (renameTargetId.value && renameValue.value.trim()) {
     renameProject(renameTargetId.value, renameValue.value.trim())
@@ -352,9 +375,7 @@ const confirmRename = () => {
   renameValue.value = ''
 }
 
-// Check API key before navigation | 跳转前检查 API Key
 const checkApiKeyAndNavigate = (callback) => {
-  
   if (!isApiConfigured.value) {
     dialog.warning({
       title: '未配置 API Key',
@@ -367,7 +388,6 @@ const checkApiKeyAndNavigate = (callback) => {
   return true
 }
 
-// Create new project | 创建新项目
 const createNewProject = () => {
   checkApiKeyAndNavigate(() => {
     const id = createProject('未命名项目')
@@ -375,46 +395,36 @@ const createNewProject = () => {
   })
 }
 
-// Create project with input text | 使用输入文本创建项目
 const handleCreateWithInput = () => {
   checkApiKeyAndNavigate(() => {
     const name = inputText.value.trim() || '未命名项目'
     const id = createProject(name)
-    // Store the input text to be used as initial prompt
     sessionStorage.setItem('ai-canvas-initial-prompt', inputText.value.trim())
     inputText.value = ''
     router.push(`/canvas/${id}`)
   })
 }
 
-// Open existing project | 打开已有项目
 const openProject = (project) => {
   checkApiKeyAndNavigate(() => {
     router.push(`/canvas/${project.id}`)
   })
 }
 
-// Check if URL is a video | 检查 URL 是否为视频
 const isVideoUrl = (url) => {
   if (!url || typeof url !== 'string') return false
   const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv']
   return videoExtensions.some(ext => url.toLowerCase().includes(ext))
 }
 
-// Import h for render functions | 导入 h 用于渲染函数
-import { h } from 'vue'
-
-// Projects section ref | 项目区域引用
 const projectsSection = ref(null)
 
-// Scroll to projects section | 滚动到项目区域
 const scrollToProjects = () => {
   if (projectsSection.value) {
     projectsSection.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 }
 
-// Initialize projects store on mount | 挂载时初始化项目存储
 onMounted(() => {
   initProjectsStore()
 })

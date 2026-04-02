@@ -1,38 +1,36 @@
 <template>
-  <!-- Canvas page | 画布页面 -->
   <div class="h-screen w-screen flex flex-col bg-[var(--bg-primary)]">
-    <!-- Header | 顶部导航 -->
-    <AppHeader class="bg-[var(--bg-secondary)]">
+    <AppHeader>
       <template #left>
         <button 
           @click="goBack"
-          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
+          class="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-xl transition-all duration-300 ease-smooth"
         >
-          <n-icon :size="20"><ChevronBackOutline /></n-icon>
+          <n-icon :size="16"><ChevronBackOutline /></n-icon>
         </button>
         <n-dropdown :options="projectOptions" @select="handleProjectAction">
-          <button class="flex items-center gap-1 hover:bg-[var(--bg-tertiary)] px-2 py-1 rounded-lg transition-colors">
-            <span class="font-medium">{{ projectName }}</span>
-            <n-icon :size="16"><ChevronDownOutline /></n-icon>
+          <button class="flex items-center gap-1 hover:bg-[var(--bg-tertiary)] px-2.5 py-1.5 rounded-xl transition-all duration-300 ease-smooth">
+            <span class="font-medium text-sm text-[var(--text-primary)]">{{ projectName }}</span>
+            <n-icon :size="12" class="text-[var(--text-muted)]"><ChevronDownOutline /></n-icon>
           </button>
         </n-dropdown>
       </template>
       <template #right>
         <button 
           @click="showDownloadModal = true"
-          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-          :class="{ 'text-[var(--accent-color)]': hasDownloadableAssets }"
-          title="批量下载素材"
+          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-xl transition-all duration-300 ease-smooth"
+          :class="hasDownloadableAssets ? 'text-[var(--accent-color)]' : 'text-[var(--text-muted)]'"
+          title="批量下载"
         >
-          <n-icon :size="20"><DownloadOutline /></n-icon>
+          <n-icon :size="16"><DownloadOutline /></n-icon>
         </button>
         <button 
           @click="showApiSettings = true"
-          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-          :class="{ 'text-[var(--accent-color)]': isApiConfigured }"
+          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-xl transition-all duration-300 ease-smooth"
+          :class="isApiConfigured ? 'text-[var(--accent-color)]' : 'text-[var(--text-muted)]'"
           title="API 设置"
         >
-          <n-icon :size="20"><SettingsOutline /></n-icon>
+          <n-icon :size="16"><SettingsOutline /></n-icon>
         </button>
       </template>
     </AppHeader>
@@ -68,146 +66,137 @@
         />
       </VueFlow>
 
-      <!-- Left toolbar | 左侧工具栏 -->
-      <aside class="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg z-10">
+      <!-- Left toolbar -->
+      <aside class="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-1 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] shadow-[var(--card-shadow)] z-10">
         <button 
           @click="showNodeMenu = !showNodeMenu"
-          class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors"
+          class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-[#050505] hover:bg-[var(--accent-hover)] transition-all duration-300 ease-smooth active:scale-95"
           title="添加节点"
         >
-          <n-icon :size="20"><AddOutline /></n-icon>
+          <n-icon :size="16"><AddOutline /></n-icon>
         </button>
         <button 
           @click="showWorkflowPanel = true"
-          class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
+          class="w-10 h-10 flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all duration-300 ease-smooth"
           title="工作流模板"
         >
-          <n-icon :size="20"><AppsOutline /></n-icon>
+          <n-icon :size="16"><AppsOutline /></n-icon>
         </button>
-        <div class="w-full h-px bg-[var(--border-color)] my-1"></div>
+        <div class="w-full h-px bg-[var(--border-subtle)] my-0.5"></div>
         <button 
           v-for="tool in tools" 
           :key="tool.id"
           @click="tool.action"
           :disabled="tool.disabled && tool.disabled()"
-          class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          class="w-10 h-10 flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all duration-300 ease-smooth disabled:opacity-15 disabled:cursor-not-allowed"
           :title="tool.name"
         >
-          <n-icon :size="20"><component :is="tool.icon" /></n-icon>
+          <n-icon :size="16"><component :is="tool.icon" /></n-icon>
         </button>
       </aside>
 
-      <!-- Node menu popup | 节点菜单弹窗 -->
+      <!-- Node menu popup -->
       <div 
         v-if="showNodeMenu"
-        class="absolute left-20 top-1/2 -translate-y-1/2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg p-2 z-20"
+        class="absolute left-20 top-1/2 -translate-y-1/2 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] shadow-[var(--card-shadow-hover)] p-1 z-20 min-w-[160px]"
       >
         <button 
           v-for="nodeType in nodeTypeOptions" 
           :key="nodeType.type"
           @click="addNewNode(nodeType.type)"
-          class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors text-left"
+          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--bg-tertiary)] transition-all duration-200 text-left"
         >
-          <n-icon :size="20" :color="nodeType.color"><component :is="nodeType.icon" /></n-icon>
-          <span class="text-sm">{{ nodeType.name }}</span>
+          <n-icon :size="16" :color="nodeType.color"><component :is="nodeType.icon" /></n-icon>
+          <span class="text-sm text-[var(--text-primary)]">{{ nodeType.name }}</span>
         </button>
       </div>
 
-      <!-- Bottom controls | 底部控制 -->
-      <div class="absolute bottom-4 left-4 flex items-center gap-2 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-color)] p-1">
-        <!-- <button 
-          @click="showGrid = !showGrid" 
-          :class="showGrid ? 'bg-[var(--accent-color)] text-white' : 'hover:bg-[var(--bg-tertiary)]'"
-          class="p-2 rounded transition-colors"
-          title="切换网格"
-        >
-          <n-icon :size="16"><GridOutline /></n-icon>
-        </button> -->
+      <!-- Bottom zoom controls -->
+      <div class="absolute bottom-4 left-4 flex items-center gap-0.5 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-[var(--card-shadow)] p-0.5">
         <button 
           @click="fitView({ padding: 0.2 })" 
-          class="p-2 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
+          class="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-lg transition-all duration-200"
           title="适应视图"
         >
-          <n-icon :size="16"><LocateOutline /></n-icon>
+          <n-icon :size="13"><LocateOutline /></n-icon>
         </button>
-        <div class="flex items-center gap-1 px-2">
-          <button @click="zoomOut" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
-            <n-icon :size="14"><RemoveOutline /></n-icon>
+        <div class="flex items-center gap-0.5 px-1">
+          <button @click="zoomOut" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-lg transition-all duration-200">
+            <n-icon :size="12"><RemoveOutline /></n-icon>
           </button>
-          <span class="text-xs min-w-[40px] text-center">{{ Math.round(viewport.zoom * 100) }}%</span>
-          <button @click="zoomIn" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
-            <n-icon :size="14"><AddOutline /></n-icon>
+          <span class="text-[11px] font-mono min-w-[36px] text-center text-[var(--text-muted)]">{{ Math.round(viewport.zoom * 100) }}%</span>
+          <button @click="zoomIn" class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-lg transition-all duration-200">
+            <n-icon :size="12"><AddOutline /></n-icon>
           </button>
         </div>
       </div>
 
-      <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20">
-        <!-- Processing indicator | 处理中指示器 -->
+      <!-- Bottom input panel -->
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-20">
+        <!-- Processing indicator -->
         <div 
           v-if="isProcessing" 
-          class="mb-3 p-3 bg-[var(--bg-primary)] rounded-xl border border-[var(--accent-color)] animate-pulse"
+          class="mb-3 p-3.5 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--accent-color)]/20 shadow-[var(--card-shadow)]"
         >
           <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
             <n-spin :size="14" />
-            <span>正在生成提示词...</span>
+            <span class="font-medium text-xs tracking-wide">正在生成...</span>
           </div>
-          <div v-if="currentResponse" class="text-sm text-[var(--text-primary)] whitespace-pre-wrap">
+          <div v-if="currentResponse" class="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
             {{ currentResponse }}
           </div>
         </div>
 
-        <div class="bg-[var(--bg-primary)] rounded-xl border border-[var(--border-color)] p-3">
-          <textarea
-            v-model="chatInput"
-            :placeholder="inputPlaceholder"
-            :disabled="isProcessing"
-            class="w-full bg-transparent resize-none outline-none text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] min-h-[40px] max-h-[120px] disabled:opacity-50"
-            rows="1"
-            @keydown.enter.exact="handleEnterKey"
-            @keydown.enter.ctrl="sendMessage"
-          />
-          <div class="flex items-center justify-between mt-2">
-            <div class="flex items-center gap-2">
-              <button 
-                @click="handlePolish"
-                :disabled="isProcessing || !chatInput.trim()"
-                class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="AI 润色提示词"
-              >
-                ✨ AI 润色
-              </button>
-            </div>
-            <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                <n-switch v-model:value="autoExecute" size="small" />
-                自动执行
-              </label>
-              <button 
-                @click="sendMessage"
+        <div class="p-[1px] rounded-2xl bg-gradient-to-b from-[rgba(255,255,255,0.04)] to-transparent">
+          <div class="p-1.5 bg-[var(--bg-secondary)] rounded-2xl shadow-[var(--card-shadow)]">
+            <div class="bg-[var(--bg-primary)] rounded-[10px] p-3">
+              <textarea
+                v-model="chatInput"
+                :placeholder="inputPlaceholder"
                 :disabled="isProcessing"
-                class="w-8 h-8 rounded-xl bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <n-spin v-if="isProcessing" :size="16" />
-                <n-icon v-else :size="20" color="white"><SendOutline /></n-icon>
-              </button>
+                class="w-full bg-transparent resize-none outline-none text-[var(--text-primary)] placeholder:text-[var(--text-muted)] min-h-[32px] max-h-[100px] text-sm disabled:opacity-50"
+                rows="1"
+                @keydown.enter.exact="handleEnterKey"
+                @keydown.enter.ctrl="sendMessage"
+              />
+              <div class="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-subtle)]">
+                <div class="flex items-center gap-2">
+                  <button 
+                    @click="handlePolish"
+                    :disabled="isProcessing || !chatInput.trim()"
+                    class="px-3 py-1.5 text-[11px] font-medium tracking-wide rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all duration-300 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    AI 润色
+                  </button>
+                </div>
+                <div class="flex items-center gap-3">
+                  <label class="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+                    <n-switch v-model:value="autoExecute" size="small" />
+                    自动执行
+                  </label>
+                  <button 
+                    @click="sendMessage"
+                    :disabled="isProcessing"
+                    class="w-8 h-8 rounded-xl bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition-all duration-300 ease-smooth active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <n-spin v-if="isProcessing" :size="12" />
+                    <n-icon v-else :size="14" color="#050505"><SendOutline /></n-icon>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
         
-        <!-- Quick suggestions | 快捷建议 -->
-        <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
-          <span class="text-xs text-[var(--text-secondary)]">推荐：</span>
+        <!-- Tags -->
+        <div class="flex flex-wrap items-center justify-center gap-2 mt-2.5">
           <button 
             v-for="tag in suggestions" 
             :key="tag"
             @click="chatInput = tag"
-            class="px-2 py-0.5 text-xs rounded-full bg-[var(--bg-secondary)]/80 border border-[var(--border-color)] hover:border-[var(--accent-color)] transition-colors"
+            class="px-2.5 py-1 text-[11px] tracking-wide rounded-full border border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] transition-all duration-300 ease-smooth"
           >
             {{ tag }}
-          </button>
-          <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors">
-            <n-icon :size="14"><RefreshOutline /></n-icon>
           </button>
         </div>
       </div>
