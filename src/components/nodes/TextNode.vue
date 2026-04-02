@@ -428,9 +428,9 @@ const editorHtml = computed(() => {
 
 // Text node menu operations | 文本节点菜单操作
 const operations = [
-  { type: 'imageConfig', label: '生图', icon: ImageOutline },
-  { type: 'videoConfig', label: '生视频', icon: VideocamOutline },
-  { type: 'llmConfig', label: 'LLM', icon: ChatbubbleOutline }
+  { type: 'imageConfig', label: '出图', icon: ImageOutline },
+  { type: 'videoConfig', label: '影像', icon: VideocamOutline },
+  { type: 'llmConfig', label: '长文', icon: ChatbubbleOutline }
 ]
 
 // Handle menu select | 处理菜单选择
@@ -440,9 +440,9 @@ const handleSelect = (item) => {
   const nodeY = currentNode?.position?.y || 0
 
   const defaultData = {
-    imageConfig: { model: 'doubao-seedream-4-5-251128', size: '2048x2048', label: '文生图' },
-    videoConfig: { label: '视频生成' },
-    llmConfig: { label: 'LLM文本生成' }
+    imageConfig: { model: 'doubao-seedream-4-5-251128', size: '2048x2048', label: '出图' },
+    videoConfig: { label: '影像' },
+    llmConfig: { label: '长文' }
   }
 
   const newId = addNode(item.type, { x: nodeX + 400, y: nodeY }, defaultData[item.type] || {})
@@ -697,7 +697,7 @@ const handleImageGen = () => {
   const configNodeId = addNode('imageConfig', { x: nodeX + 400, y: nodeY }, {
     model: 'doubao-seedream-4-5-251128',
     size: '2048x2048',
-    label: '文生图'
+    label: '出图'
   })
 
   // Auto connect | 自动连接
@@ -722,7 +722,7 @@ const handleVideoGen = () => {
 
   // Create videoConfig node | 创建视频配置节点
   const configNodeId = addNode('videoConfig', { x: nodeX + 400, y: nodeY }, {
-    label: '视频生成'
+    label: '影像'
   })
 
   // Auto connect | 自动连接

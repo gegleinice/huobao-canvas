@@ -175,7 +175,7 @@ const editingLabelValue = ref('')
 const labelInputRef = ref(null)
 
 // Computed node label | 计算节点标签
-const nodeLabel = computed(() => props.data?.label || 'LLM 文本生成')
+const nodeLabel = computed(() => props.data?.label || '长文')
 
 // Mentions picker state | @ 选择器状态
 const showMentionsPicker = ref(false)
@@ -417,9 +417,9 @@ const handleSelect = (item) => {
   const nodeY = currentNode?.position?.y || 0
 
   const defaultData = {
-    imageConfig: { model: 'doubao-seedream-4-5-251128', size: '2048x2048', label: '文生图' },
-    videoConfig: { label: '视频生成' },
-    text: { content: '', label: '文本输入' }
+    imageConfig: { model: 'doubao-seedream-4-5-251128', size: '2048x2048', label: '出图' },
+    videoConfig: { label: '影像' },
+    text: { content: '', label: '文字' }
   }
 
   const newId = addNode(item.type, { x: nodeX + 400, y: nodeY }, defaultData[item.type] || {})

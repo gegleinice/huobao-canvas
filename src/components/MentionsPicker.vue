@@ -73,7 +73,7 @@ const props = defineProps({
     type: Object,
     default: () => ({ x: 0, y: 0 })
   },
-  // 上下文类型：'text' | 'llmConfig'
+  // 上下文类型：'text' | 'llmConfig' | 'imageConfig'（出图节点：画面+文字+长文）
   context: {
     type: String,
     default: 'text'
@@ -114,11 +114,17 @@ const targetTypes = computed(() => {
   if (props.context === 'llmConfig') {
     return ['text']
   }
+  if (props.context === 'imageConfig') {
+    return ['image', 'text', 'llmConfig']
+  }
   return ['image']
 })
 
 // 检查节点是否公开（仅 ImageNode 需要检查 publicProps.name）
 const isNodePublic = (node) => {
+  if (props.context === 'imageConfig') {
+    return true
+  }
   if (node.type === 'image') {
     // ImageNode 需要有 publicProps.name 才算公开
     return node.data?.publicProps?.name && node.data.publicProps.name !== ''

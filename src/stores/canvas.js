@@ -235,7 +235,7 @@ const getDefaultNodeData = (type) => {
     case 'text':
       return {
         content: '',
-        label: '文本输入',
+        label: '文字',
         publicProps: {}  // 公共属性（可被 @ 引用）
       }
     case 'imageConfig': {
@@ -245,7 +245,7 @@ const getDefaultNodeData = (type) => {
         model: DEFAULT_IMAGE_MODEL,
         size: imageModel?.defaultParams?.size || '1x1',
         quality: imageModel?.defaultParams?.quality || 'standard',
-        label: '文生图'
+        label: '出图'
       }
     }
     case 'videoConfig': {
@@ -255,19 +255,19 @@ const getDefaultNodeData = (type) => {
         ratio: videoModel?.defaultParams?.ratio || '16:9',
         duration: videoModel?.defaultParams?.duration || 5,
         model: DEFAULT_VIDEO_MODEL,
-        label: '图生视频'
+        label: '影像'
       }
     }
     case 'video':
       return {
         url: '',
         duration: 0,
-        label: '视频节点'
+        label: '成片'
       }
     case 'image':
       return {
         url: '',
-        label: '图片节点',
+        label: '画面',
         publicProps: { name: '图片' }  // 公共属性（可被 @ 引用）
       }
     case 'llmConfig':
@@ -276,7 +276,7 @@ const getDefaultNodeData = (type) => {
         model: DEFAULT_CHAT_MODEL,
         outputFormat: 'text',
         outputContent: '',
-        label: 'LLM文本生成',
+        label: '长文',
         publicProps: {}  // 公共属性（可被 @ 引用）
       }
     default:
@@ -395,15 +395,15 @@ export const initSampleData = () => {
   // Add text node | 添加文本节点
   addNode('text', { x: 150, y: 150 }, {
     content: '一只金毛寻回犬在草地上奔跑，摇着尾巴，脸上带着快乐的表情。它的毛发在阳光下闪耀，眼神充满了对自由的渴望，全身散发着阳光、友善的气息。',
-    label: '文本输入'
+    label: '文字'
   })
   
-  // Add image config node | 添加文生图配置节点
+  // Add image config node | 添加出图配置节点
   addNode('imageConfig', { x: 450, y: 150 }, {
     prompt: '',
     model: 'doubao-seedream-4-5-251128',
     ratio: '16:9 | 4张 | 高清',
-    label: '文生图'
+    label: '出图'
   })
   
   // Add edge between nodes | 添加节点之间的边

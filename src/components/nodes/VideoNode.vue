@@ -210,10 +210,10 @@ const startPolling = async (taskId) => {
       url: result.url,
       loading: false,
       progress: 100,
-      label: '视频生成',
+      label: '影像',
       taskId: null  // 清除 taskId
     })
-    window.$message?.success('视频生成成功')
+    window.$message?.success('成片好了')
   } catch (err) {
     // 轮询失败
     updateNode(props.id, {
@@ -222,7 +222,7 @@ const startPolling = async (taskId) => {
       label: '生成失败',
       taskId: null  // 清除 taskId
     })
-    window.$message?.error(err.message || '视频生成失败')
+    window.$message?.error(err.message || '出片失败')
   } finally {
     isPolling.value = false
   }
@@ -234,7 +234,7 @@ const handleSelect = (item) => {
   const nodeX = currentNode?.position?.x || 0
   const nodeY = currentNode?.position?.y || 0
 
-  const newId = addNode('videoConfig', { x: nodeX + 400, y: nodeY }, { label: '视频生成' })
+  const newId = addNode('videoConfig', { x: nodeX + 400, y: nodeY }, { label: '影像' })
 
   addEdge({
     source: props.id,
@@ -246,7 +246,7 @@ const handleSelect = (item) => {
   setTimeout(() => {
     updateNodeInternals(newId)
   }, 50)
-  window.$message?.success(`已创建视频生成节点`)
+  window.$message?.success(`已加一块影像`)
 }
 
 // Handle file upload | 处理文件上传

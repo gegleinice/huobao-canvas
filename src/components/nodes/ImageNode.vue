@@ -442,7 +442,7 @@ const handleSelect = (item) => {
 
     // Create videoConfig node
     const configNodeId = addNode('videoConfig', { x: nodeX + 600, y: nodeY }, {
-      label: '视频生成'
+      label: '影像'
     })
 
     // Connect image to videoConfig
@@ -464,7 +464,7 @@ const handleSelect = (item) => {
     })
 
     setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
-    window.$message?.success('已创建视频生成工作流')
+    window.$message?.success('已接上影像')
   }
 }
 
@@ -922,7 +922,7 @@ const handleVideoGen = () => {
 
   // Create videoConfig node | 创建视频配置节点
   const configNodeId = addNode('videoConfig', { x: nodeX + 600, y: nodeY }, {
-    label: '视频生成'
+    label: '影像'
   })
 
   // Connect image node to config node with role | 连接图片节点到配置节点并设置角色

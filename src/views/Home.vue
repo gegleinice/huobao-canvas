@@ -2,9 +2,8 @@
   <div class="min-h-[100dvh] h-screen overflow-y-auto bg-[#050505]">
     <!-- Minimal Header -->
     <header class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 md:px-12 py-5">
-      <div class="flex items-center gap-3">
-        <img src="../assets/logo.png" alt="Logo" class="w-8 h-8" />
-        <span class="text-[15px] font-semibold text-white tracking-tight">臭鼬AIGC</span>
+      <div class="flex items-center">
+        <span class="text-[17px] font-semibold text-white tracking-tight">臭鼬AIGC</span>
       </div>
       <button 
         @click="showApiSettings = true"
@@ -213,9 +212,8 @@
 
       <!-- Footer -->
       <footer class="px-8 md:px-12 py-8 border-t border-[#111]">
-        <div class="flex items-center justify-between max-w-6xl">
+        <div class="max-w-6xl">
           <span class="text-[11px] text-[#333] tracking-wide">臭鼬AIGC</span>
-          <span class="text-[11px] text-[#222]">Powered by AI</span>
         </div>
       </footer>
     </main>

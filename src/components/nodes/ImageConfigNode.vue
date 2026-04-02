@@ -38,15 +38,38 @@
 
       <!-- Config options | 配置选项 -->
       <div class="p-3 space-y-3">
-        <!-- Model selector | 模型选择 -->
-        <div class="flex items-center justify-between">
-          <span class="text-xs text-[var(--text-secondary)]">模型</span>
-          <n-dropdown :options="modelOptions" @select="handleModelSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
-              {{ displayModelName }}
-              <n-icon :size="12"><ChevronDownOutline /></n-icon>
-            </button>
-          </n-dropdown>
+        <!-- Tapnow-style: 可搜模型 + @ 接线 | 模型与参考/提示词 -->
+        <div class="tapnow-strip rounded-2xl border border-white/[0.08] bg-black/25 flex items-stretch min-h-[42px] overflow-hidden backdrop-blur-sm">
+          <n-select
+            v-model:value="localModel"
+            :options="selectModelOptions"
+            filterable
+            :clearable="false"
+            placeholder="搜模型…"
+            size="small"
+            class="tapnow-model-select"
+            @update:value="handleModelSelect"
+          />
+          <div class="w-px shrink-0 bg-white/[0.08] my-2" aria-hidden="true" />
+          <div class="flex-1 min-w-0 flex items-center relative">
+            <n-input
+              ref="composerInputRef"
+              v-model:value="composerWireQuery"
+              type="text"
+              :bordered="false"
+              placeholder="@ 画面 · 文字 · 长文"
+              size="small"
+              class="tapnow-wire-input"
+              @keydown="onComposerWireKeydown"
+            />
+            <MentionsPicker
+              :visible="mentionPickerVisible"
+              :position="mentionPickerPosition"
+              context="imageConfig"
+              @update:visible="mentionPickerVisible = $event"
+              @select="onWireMentionSelect"
+            />
+          </div>
         </div>
 
         <!-- Quality selector | 画质选择 -->
@@ -81,17 +104,9 @@
           💡 {{ currentModelConfig.tips }}
         </div>
 
-        <!-- Connected inputs indicator | 连接输入指示 -->
-        <div
-          class="flex items-center gap-2 text-xs text-[var(--text-secondary)] py-1 border-t border-[var(--border-color)]">
-          <span class="px-2 py-0.5 rounded-full"
-            :class="connectedPrompts.length > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
-            提示词 {{ connectedPrompts.length > 0 ? `${connectedPrompts.length}个` : '○' }}
-          </span>
-          <span class="px-2 py-0.5 rounded-full"
-            :class="connectedRefImages.length > 0 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
-            参考图 {{ connectedRefImages.length > 0 ? `${connectedRefImages.length}张` : '○' }}
-          </span>
+        <!-- 接线状态 | 精简一行 -->
+        <div class="flex items-center gap-2 text-[10px] text-[var(--text-muted)] pt-0.5">
+          <span>提示词 {{ connectedPrompts.length }} · 参考 {{ connectedRefImages.length }}</span>
         </div>
 
         <!-- Generate button | 生成按钮 -->
@@ -160,11 +175,12 @@
  */
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { NIcon, NDropdown, NSpin } from 'naive-ui'
-import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
+import { NIcon, NDropdown, NSpin, NSelect, NInput } from 'naive-ui'
+import { ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
 import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import MentionsPicker from '../MentionsPicker.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
 import { parseMentions } from '../../hooks/useNodeRef'
@@ -233,19 +249,114 @@ const handleSelect = (item) => {
 // Get current model config | 获取当前模型配置
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
-// Model options from Pinia store (filtered by provider) | 从 Pinia store 获取模型选项（根据渠道过滤）
+// Model options from Pinia store | 模型列表
 const modelOptions = computed(() => modelStore.allImageModelOptions)
 
-// Display model name | 显示模型名称
-const displayModelName = computed(() => {
-  const model = modelOptions.value.find(m => m.key === localModel.value)
-  // 如果当前模型不在选项中，尝试从 allImageModels 找到
-  if (!model) {
-    const allModel = modelStore.allImageModels.find(m => m.key === localModel.value)
-    return allModel?.label || localModel.value || '选择模型'
+// n-select 用 { label, value }
+const selectModelOptions = computed(() =>
+  modelOptions.value.map((o) => ({ label: o.label, value: o.key }))
+)
+
+// Tapnow 条：@ 接线
+const composerInputRef = ref(null)
+const composerWireQuery = ref('')
+const mentionPickerVisible = ref(false)
+const mentionPickerPosition = ref({ x: 0, y: 0 })
+
+const openWireMentionPicker = () => {
+  nextTick(() => {
+    const inst = composerInputRef.value
+    const root = inst?.$el
+    const inputEl = root?.querySelector?.('input') || root
+    if (!inputEl?.getBoundingClientRect) return
+    const r = inputEl.getBoundingClientRect()
+    mentionPickerPosition.value = { x: r.left, y: r.bottom + 6 }
+    mentionPickerVisible.value = true
+  })
+}
+
+const onComposerWireKeydown = (e) => {
+  if (e.key === '@') {
+    e.preventDefault()
+    openWireMentionPicker()
   }
-  return model?.label || localModel.value || '选择模型'
-})
+}
+
+const ensurePromptEdge = (sourceId) => {
+  if (edges.value.some((ed) => ed.source === sourceId && ed.target === props.id)) {
+    window.$message?.info('已经连上了')
+    return
+  }
+  const sourceNode = nodes.value.find((n) => n.id === sourceId)
+  if (!sourceNode || (sourceNode.type !== 'text' && sourceNode.type !== 'llmConfig')) return
+  const existingTextEdges = edges.value.filter(
+    (ed) => ed.target === props.id && ed.type === 'promptOrder'
+  )
+  const nextOrder = existingTextEdges.length + 1
+  addEdge({
+    source: sourceId,
+    target: props.id,
+    sourceHandle: 'right',
+    targetHandle: 'left',
+    type: 'promptOrder',
+    data: { promptOrder: nextOrder }
+  })
+  nextTick(() => {
+    updateNodeInternals(props.id)
+    updateNodeInternals(sourceId)
+  })
+  window.$message?.success('已接上提示词')
+}
+
+const ensureRefImageEdge = (sourceId) => {
+  if (edges.value.some((ed) => ed.source === sourceId && ed.target === props.id)) {
+    window.$message?.info('已经连上了')
+    return
+  }
+  const sourceNode = nodes.value.find((n) => n.id === sourceId)
+  if (sourceNode?.type !== 'image') return
+  const existingImageEdges = edges.value.filter(
+    (ed) => ed.target === props.id && ed.type === 'imageOrder'
+  )
+  let mentionedImageCount = 0
+  const connectedTextEdges = edges.value.filter((ed) => ed.target === props.id)
+  for (const ed of connectedTextEdges) {
+    const sn = nodes.value.find((n) => n.id === ed.source)
+    if (sn?.type === 'text') {
+      const content = sn.data?.content || ''
+      const mentionRegex = /@\[([^\]|]+)(?:\|([^\]]+))?\]/g
+      let match
+      while ((match = mentionRegex.exec(content)) !== null) {
+        const mentionedNode = nodes.value.find((n) => n.id === match[1])
+        if (mentionedNode?.type === 'image') mentionedImageCount++
+      }
+    }
+  }
+  const nextOrder = existingImageEdges.length + mentionedImageCount + 1
+  addEdge({
+    source: sourceId,
+    target: props.id,
+    sourceHandle: 'right',
+    targetHandle: 'left',
+    type: 'imageOrder',
+    data: { imageOrder: nextOrder }
+  })
+  nextTick(() => {
+    updateNodeInternals(props.id)
+    updateNodeInternals(sourceId)
+  })
+  window.$message?.success('已接上参考')
+}
+
+const onWireMentionSelect = ({ nodeId, type }) => {
+  mentionPickerVisible.value = false
+  composerWireQuery.value = ''
+  if (type === 'image') {
+    ensureRefImageEdge(nodeId)
+  } else if (type === 'text' || type === 'llmConfig') {
+    ensurePromptEdge(nodeId)
+  }
+}
 
 // Quality options based on model | 基于模型的画质选项
 const qualityOptions = computed(() => {
@@ -667,7 +778,7 @@ const handleGenerate = async (mode = 'auto') => {
       updateNode(imageNodeId, {
         url: result[0].url,
         loading: false,
-        label: '文生图',
+        label: '出图',
         model: localModel.value,
         updatedAt: Date.now()
       })
@@ -779,5 +890,30 @@ watch(
 .image-config-node {
   cursor: default;
   position: relative;
+}
+
+.tapnow-strip :deep(.tapnow-model-select) {
+  min-width: 132px;
+  max-width: 46%;
+}
+
+.tapnow-strip :deep(.tapnow-model-select .n-base-selection) {
+  --n-border: none !important;
+  --n-border-hover: none !important;
+  --n-border-focus: none !important;
+  --n-box-shadow-focus: none !important;
+  background: transparent !important;
+}
+
+.tapnow-strip :deep(.tapnow-model-select .n-base-selection-label) {
+  font-size: 12px;
+}
+
+.tapnow-strip :deep(.tapnow-wire-input .n-input) {
+  background: transparent !important;
+}
+
+.tapnow-strip :deep(.tapnow-wire-input .n-input__input-el) {
+  font-size: 12px;
 }
 </style>

@@ -11,7 +11,7 @@
           @dblclick="startEditLabel"
           class="text-sm font-medium text-[var(--text-secondary)] cursor-text hover:bg-[var(--bg-tertiary)] px-1 rounded transition-colors"
           title="双击编辑名称"
-        >{{ data.label || '视频生成' }}</span>
+        >{{ data.label || '影像' }}</span>
         <input
           v-else
           ref="labelInputRef"
@@ -356,7 +356,7 @@ const handleGenerate = async () => {
   const videoNodeId = addNode('video', { x: nodeX + 350, y: nodeY }, {
     url: '',
     loading: true,
-    label: '视频生成中...'
+    label: '出片中…'
   })
   createdVideoNodeId.value = videoNodeId
 
@@ -418,11 +418,11 @@ const handleGenerate = async () => {
       updateNode(videoNodeId, {
         url: url,
         loading: false,
-        label: '视频生成',
+        label: '影像',
         model: localModel.value,
         updatedAt: Date.now()
       })
-      window.$message?.success('视频生成成功')
+      window.$message?.success('成片好了')
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
     } else if (newTaskId) {
@@ -430,7 +430,7 @@ const handleGenerate = async () => {
       updateNode(videoNodeId, {
         taskId: newTaskId,
         loading: true,
-        label: '视频生成中...',
+        label: '出片中…',
         model: localModel.value,
         updatedAt: Date.now()
       })
@@ -446,7 +446,7 @@ const handleGenerate = async () => {
       label: '生成失败',
       updatedAt: Date.now()
     })
-    window.$message?.error(err.message || '视频生成失败')
+    window.$message?.error(err.message || '出片失败')
   } finally {
     isGenerating.value = false
   }
@@ -454,7 +454,7 @@ const handleGenerate = async () => {
 
 // Start editing label | 开始编辑 label
 const startEditLabel = () => {
-  editingLabelValue.value = props.data?.label || '视频生成'
+  editingLabelValue.value = props.data?.label || '影像'
   isEditingLabel.value = true
   nextTick(() => {
     labelInputRef.value?.focus()

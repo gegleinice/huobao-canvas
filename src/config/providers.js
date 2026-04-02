@@ -6,7 +6,7 @@
 // 渠道适配配置
 export const PROVIDERS = {
   chatfire: {
-    label: '臭鼬AIGC (Chatfire)',
+    label: '臭鼬AIGC',
     defaultBaseUrl: 'https://api.chatfire.site',
     // 端点路径
     endpoints: {

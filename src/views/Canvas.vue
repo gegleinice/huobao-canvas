@@ -53,6 +53,8 @@
         :snap-to-grid="true"
         :snap-grid="[20, 20]"
         @connect="onConnect"
+        @connect-start="onConnectStart"
+        @connect-end="onConnectEnd"
         @node-click="onNodeClick"
         @pane-click="onPaneClick"
         @viewport-change="handleViewportChange"
@@ -74,22 +76,17 @@
         />
       </VueFlow>
 
-      <!-- Center hint — double-click to create | 中央提示 -->
+      <!-- Center hint — only on empty canvas | 空画布时才显示 -->
       <div
+        v-if="showEmptyCanvasHint"
         class="pointer-events-none absolute left-1/2 top-[18%] z-[5] -translate-x-1/2 select-none"
         aria-hidden="true"
       >
         <div
-          class="pointer-events-auto flex items-center gap-0.5 rounded-full border border-white/[0.12] bg-[rgba(18,18,18,0.72)] px-1 py-1 shadow-lg backdrop-blur-xl"
+          class="pointer-events-auto flex items-center gap-2 rounded-full border border-white/[0.1] bg-[rgba(16,16,16,0.78)] px-4 py-2 shadow-lg backdrop-blur-xl"
         >
-          <span
-            class="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-medium tracking-wide text-white/85"
-          >
-            <n-icon :size="14" class="text-[var(--accent-color)]"><SparklesOutline /></n-icon>
-            双击
-          </span>
-          <span class="pr-4 pl-1 text-[11px] tracking-wide text-white/45">
-            画布添加节点，或打开左侧「+」与模板
+          <span class="text-[11px] font-medium tracking-wide text-white/50">
+            双击空白加一块 · 拖线停一会或松手可选块
           </span>
         </div>
       </div>
@@ -98,39 +95,29 @@
       <Teleport to="body">
         <div
           v-if="dblClickPalette.open"
-          class="fixed inset-0 z-[100] bg-transparent"
-          @click.self="closeDblClickPalette"
+          class="canvas-palette-layer fixed inset-0 z-[100] bg-transparent pointer-events-none"
         >
           <div
-            class="nodrag nopan canvas-dbl-palette absolute z-[101] w-[min(280px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-white/[0.1] bg-[rgba(28,28,28,0.94)] py-2 shadow-2xl backdrop-blur-2xl"
+            class="nodrag nopan canvas-dbl-palette pointer-events-auto absolute z-[101] w-[min(280px,calc(100vw-24px))] overflow-hidden rounded-2xl border border-white/[0.1] bg-[rgba(28,28,28,0.94)] py-2 shadow-2xl backdrop-blur-2xl"
             :style="dblClickPaletteStyle"
             @click.stop
           >
-            <p class="px-3 pb-2 text-[10px] font-medium uppercase tracking-wider text-white/35">
-              添加节点
+            <p class="px-3 pb-1.5 text-[10px] font-medium tracking-wider text-white/40">
+              {{ palettePanelTitle }}
             </p>
             <button
-              v-for="opt in dblClickNodeOptions"
+              v-for="opt in paletteNodeOptions"
               :key="opt.type"
               type="button"
-              class="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.06]"
+              class="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors duration-200 hover:bg-white/[0.06]"
               @click="addNodeFromDblPalette(opt.type)"
             >
               <span
-                class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]"
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]"
               >
                 <n-icon :size="18" :color="opt.color"><component :is="opt.icon" /></n-icon>
               </span>
-              <span class="min-w-0 flex-1">
-                <span class="flex items-center gap-2 text-sm text-white/90">
-                  {{ opt.name }}
-                  <span
-                    v-if="opt.badge"
-                    class="rounded-full bg-white/10 px-1.5 py-px text-[9px] font-medium text-white/50"
-                  >{{ opt.badge }}</span>
-                </span>
-                <span class="mt-0.5 block text-[11px] leading-snug text-white/40">{{ opt.hint }}</span>
-              </span>
+              <span class="text-sm text-white/88">{{ opt.name }}</span>
             </button>
           </div>
         </div>
@@ -148,7 +135,7 @@
         <button 
           @click="showWorkflowPanel = true"
           class="w-10 h-10 flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-all duration-300 ease-smooth"
-          title="工作流模板"
+          title="模板"
         >
           <n-icon :size="16"><AppsOutline /></n-icon>
         </button>
@@ -171,7 +158,7 @@
         class="absolute left-20 top-1/2 -translate-y-1/2 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-color)] shadow-[var(--card-shadow-hover)] p-1 z-20 min-w-[160px]"
       >
         <button 
-          v-for="nodeType in nodeTypeOptions" 
+          v-for="nodeType in paletteNodeOptions" 
           :key="nodeType.type"
           @click="addNewNode(nodeType.type)"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[var(--bg-tertiary)] transition-all duration-200 text-left"
@@ -201,8 +188,8 @@
         </div>
       </div>
 
-      <!-- Bottom input panel -->
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-20">
+      <!-- Bottom input panel（抬高 z-index，避免被画布内高层叠节点挡住点击） -->
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[200] pointer-events-auto">
         <!-- Processing indicator -->
         <div 
           v-if="isProcessing" 
@@ -210,7 +197,7 @@
         >
           <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
             <n-spin :size="14" />
-            <span class="font-medium text-xs tracking-wide">正在生成...</span>
+            <span class="font-medium text-xs tracking-wide">处理中…</span>
           </div>
           <div v-if="currentResponse" class="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
             {{ currentResponse }}
@@ -236,21 +223,21 @@
                     :disabled="isProcessing || !chatInput.trim()"
                     class="px-3 py-1.5 text-[11px] font-medium tracking-wide rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-all duration-300 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    AI 润色
+                    润色
                   </button>
                   <button 
                     @click="handleReflectEvolve"
                     :disabled="isProcessing || !reflectTargetNode"
                     class="px-3 py-1.5 text-[11px] font-medium tracking-wide rounded-full border border-white/[0.1] bg-white/[0.04] text-[var(--text-muted)] hover:border-[var(--accent-color)]/35 hover:text-[var(--accent-color)] transition-all duration-300 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="根据下游节点上下文，进化选中节点的提示词"
+                    title="结合后面接着的块，重写选中里的字"
                   >
-                    反思进化
+                    推敲
                   </button>
                 </div>
                 <div class="flex items-center gap-3">
                   <label class="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
                     <n-switch v-model:value="autoExecute" size="small" />
-                    自动执行
+                    连放
                   </label>
                   <button 
                     @click="sendMessage"
@@ -319,7 +306,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, ConnectionLineType } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
-import { NIcon, NSwitch, NDropdown, NMessageProvider, NSpin, NModal, NInput, NButton } from 'naive-ui'
+import { NIcon, NSwitch, NDropdown, NSpin, NModal, NInput, NButton, useMessage } from 'naive-ui'
 import { 
   ChevronBackOutline,
   ChevronDownOutline,
@@ -339,8 +326,7 @@ import {
   RemoveOutline,
   DownloadOutline,
   AppsOutline,
-  ChatbubbleOutline,
-  SparklesOutline
+  ChatbubbleOutline
 } from '@vicons/ionicons5'
 import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
@@ -357,6 +343,8 @@ import AppHeader from '../components/AppHeader.vue'
 // API Config state | API 配置状态
 const modelStore = useModelStore()
 const isApiConfigured = computed(() => !!modelStore.currentApiKey)
+
+const message = useMessage()
 
 // Initialize models on page load | 页面加载时初始化模型
 onMounted(() => {
@@ -393,10 +381,10 @@ const {
 
 // Self-reflect / evolve selected node prompt | 选中节点的反思进化（独立会话，避免污染润色上下文）
 const REFLECT_SYSTEM_PROMPT =
-  '你是 AIGC 画布上的「自我反思」顾问。用户会提供当前提示词或系统指令，以及下游已连接节点的简要上下文。\n' +
+  '你是画布上的「推敲」顾问。用户会提供当前文案或说明，以及后面接着的块的简要上下文。\n' +
   '任务：\n' +
-  '1. 内省：提示词与下游目标是否一致、缺什么具体信息；\n' +
-  '2. 进化：输出一版更可执行、更贴合下游能力的最终文案。\n' +
+  '1. 内省：这段话和后接的块是否对得上、缺什么；\n' +
+  '2. 改写：输出一版更利落、更贴后面能力的正文。\n' +
   '只输出进化后的正文，不要标题、引号或解释段落。'
 
 const {
@@ -436,7 +424,15 @@ const router = useRouter()
 const route = useRoute()
 
 // Vue Flow instance | Vue Flow 实例
-const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals, project } = useVueFlow()
+const {
+  viewport,
+  zoomIn,
+  zoomOut,
+  fitView,
+  updateNodeInternals,
+  project,
+  connectionStartHandle
+} = useVueFlow()
 
 // Default edge + connection line — smooth curves | 默认边与拖拽连线样式
 const defaultEdgeOptions = {
@@ -512,44 +508,45 @@ const projectOptions = [
   { label: '删除', key: 'delete' }
 ]
 
+// Unified node palette — Tap-style short names | 节点类型（左栏 / 双击 / 拖线落地共用）
+const paletteNodeOptions = [
+  { type: 'text', name: '文字', icon: TextOutline, color: '#93c5fd' },
+  { type: 'image', name: '画面', icon: ImageOutline, color: '#c4b5fd' },
+  { type: 'video', name: '成片', icon: VideocamOutline, color: '#fca5a5' },
+  { type: 'imageConfig', name: '出图', icon: ColorPaletteOutline, color: '#86efac' },
+  { type: 'videoConfig', name: '影像', icon: VideocamOutline, color: '#fcd34d' },
+  { type: 'llmConfig', name: '长文', icon: ChatbubbleOutline, color: '#d8b4fe' }
+]
+
 // Toolbar tools | 工具栏工具
 const tools = [
-  { id: 'text', name: '文本', icon: TextOutline, action: () => addNewNode('text') },
-  { id: 'image', name: '图片', icon: ImageOutline, action: () => addNewNode('image') },
-  { id: 'imageConfig', name: '文生图', icon: ColorPaletteOutline, action: () => addNewNode('imageConfig') },
-  { id: 'videoConfig', name: '视频生成', icon: VideocamOutline, action: () => addNewNode('videoConfig') },
+  { id: 'text', name: '文字', icon: TextOutline, action: () => addNewNode('text') },
+  { id: 'image', name: '画面', icon: ImageOutline, action: () => addNewNode('image') },
+  { id: 'imageConfig', name: '出图', icon: ColorPaletteOutline, action: () => addNewNode('imageConfig') },
+  { id: 'videoConfig', name: '影像', icon: VideocamOutline, action: () => addNewNode('videoConfig') },
   { id: 'undo', name: '撤销', icon: ArrowUndoOutline, action: () => undo(), disabled: () => !canUndo() },
   { id: 'redo', name: '重做', icon: ArrowRedoOutline, action: () => redo(), disabled: () => !canRedo() }
 ]
 
-// Node type options for menu | 节点类型菜单选项
-const nodeTypeOptions = [
-  { type: 'text', name: '文本节点', icon: TextOutline, color: '#3b82f6' },
-  { type: 'llmConfig', name: 'LLM文本生成', icon: ChatbubbleOutline, color: '#a855f7' },
-  { type: 'imageConfig', name: '文生图配置', icon: ColorPaletteOutline, color: '#22c55e' },
-  { type: 'videoConfig', name: '视频生成配置', icon: VideocamOutline, color: '#f59e0b' },
-  { type: 'image', name: '图片节点', icon: ImageOutline, color: '#8b5cf6' },
-  { type: 'video', name: '视频节点', icon: VideocamOutline, color: '#ef4444' }
-]
+const showEmptyCanvasHint = computed(() => nodes.value.length === 0)
 
-// Double-click palette rows (with hints, reference UI) | 双击面板的节点项
-const dblClickNodeOptions = [
-  { type: 'text', name: '文本', icon: TextOutline, color: '#93c5fd', hint: '提示词、脚本、说明', badge: null },
-  { type: 'image', name: '图片', icon: ImageOutline, color: '#c4b5fd', hint: '占位或引用素材', badge: null },
-  { type: 'video', name: '视频', icon: VideocamOutline, color: '#fca5a5', hint: '成片或预览节点', badge: null },
-  { type: 'imageConfig', name: '文生图', icon: ColorPaletteOutline, color: '#86efac', hint: '配置模型与画幅', badge: null },
-  { type: 'videoConfig', name: '视频生成', icon: VideocamOutline, color: '#fcd34d', hint: '图生视频、首帧等', badge: null },
-  { type: 'llmConfig', name: 'LLM 生成', icon: ChatbubbleOutline, color: '#d8b4fe', hint: '结构化文本输出', badge: 'Beta' }
-]
-
-// Double-click detection on pane | 画布双击检测
+// Double-click / wire-drop palette | 双击与拖线松手共用面板
 const dblClickPalette = ref({
   open: false,
   screenX: 0,
   screenY: 0,
   flowX: 0,
-  flowY: 0
+  flowY: 0,
+  wireFrom: null
 })
+
+const palettePanelTitle = computed(() =>
+  dblClickPalette.value.wireFrom ? '接到这里' : '加一块'
+)
+
+/** 记录从哪个点拉出的线（松在空白处时用来接新节点） */
+let connectionDragOrigin = null
+
 let paneLastClickAt = 0
 let paneLastFlowX = 0
 let paneLastFlowY = 0
@@ -566,23 +563,82 @@ const dblClickPaletteStyle = computed(() => {
 
 const closeDblClickPalette = () => {
   dblClickPalette.value.open = false
+  dblClickPalette.value.wireFrom = null
 }
 
-const openDblClickPalette = (screenX, screenY, flow) => {
+const openDblClickPalette = (screenX, screenY, flow, wireFrom = null) => {
   dblClickPalette.value = {
     open: true,
     screenX,
     screenY,
     flowX: flow.x,
-    flowY: flow.y
+    flowY: flow.y,
+    wireFrom
   }
   showNodeMenu.value = false
 }
 
+/** 拖线静止一段时间后弹出选块（与松手逻辑共用面板） */
+const CONNECT_PAUSE_MS = 420
+let connectPauseTimer = null
+const lastConnectPointer = { x: 0, y: 0 }
+
+const clearConnectPauseTimer = () => {
+  if (connectPauseTimer != null) {
+    clearTimeout(connectPauseTimer)
+    connectPauseTimer = null
+  }
+}
+
+const armConnectPauseTimer = (fallbackNodeId, fallbackHandleId) => {
+  if (!fallbackNodeId && !connectionStartHandle.value) return
+  connectPauseTimer = window.setTimeout(() => {
+    connectPauseTimer = null
+    const h = connectionStartHandle.value
+    const nodeId = h?.nodeId || fallbackNodeId
+    if (!nodeId) return
+    const handleId = (h?.id != null && h.id !== '') ? h.id : (fallbackHandleId || 'right')
+    const wireFrom = { source: nodeId, sourceHandle: handleId }
+    const flow = project({ x: lastConnectPointer.x, y: lastConnectPointer.y })
+    openDblClickPalette(lastConnectPointer.x, lastConnectPointer.y, flow, wireFrom)
+  }, CONNECT_PAUSE_MS)
+}
+
+const onPointerMoveWhileConnecting = (e) => {
+  lastConnectPointer.x = e.clientX
+  lastConnectPointer.y = e.clientY
+  clearConnectPauseTimer()
+  if (dblClickPalette.value.open && dblClickPalette.value.wireFrom) {
+    closeDblClickPalette()
+  }
+  if (!connectionStartHandle.value) return
+  armConnectPauseTimer()
+}
+
+watch(connectionStartHandle, (handle) => {
+  clearConnectPauseTimer()
+  if (handle) {
+    window.addEventListener('pointermove', onPointerMoveWhileConnecting, { passive: true })
+  } else {
+    window.removeEventListener('pointermove', onPointerMoveWhileConnecting)
+  }
+})
+
 const addNodeFromDblPalette = (type) => {
-  const { flowX, flowY } = dblClickPalette.value
+  const { flowX, flowY, wireFrom } = { ...dblClickPalette.value }
   closeDblClickPalette()
-  addNewNodeAt(type, { x: flowX, y: flowY })
+  const nodeId = addNewNodeAt(type, { x: flowX, y: flowY })
+  if (wireFrom && nodeId) {
+    nextTick(() => {
+      commitEdgeFromConnection({
+        source: wireFrom.source,
+        target: nodeId,
+        sourceHandle: wireFrom.sourceHandle || 'right',
+        targetHandle: 'left'
+      })
+      updateNodeInternals(nodeId)
+    })
+  }
 }
 
 /** Summarize downstream nodes for reflect | 下游上下文摘要 */
@@ -595,15 +651,15 @@ const buildDownstreamSummary = (sourceId) => {
     if (!t) continue
     const label = t.data?.label || t.type
     if (t.type === 'imageConfig') {
-      lines.push(`→ 文生图「${label}」模型 ${t.data?.model || '—'}，尺寸 ${t.data?.size || '—'}`)
+      lines.push(`→ 出图「${label}」${t.data?.model || '—'} · ${t.data?.size || '—'}`)
     } else if (t.type === 'videoConfig') {
-      lines.push(`→ 视频配置「${label}」比例 ${t.data?.ratio || '—'} 时长 ${t.data?.duration ?? '—'}s`)
+      lines.push(`→ 影像「${label}」${t.data?.ratio || '—'} · ${t.data?.duration ?? '—'}s`)
     } else if (t.type === 'image' && t.data?.url) {
-      lines.push(`→ 图片节点「${label}」已有一张输出图`)
+      lines.push(`→ 画面「${label}」已有图`)
     } else if (t.type === 'video' && t.data?.url) {
-      lines.push(`→ 视频节点「${label}」已有成片`)
+      lines.push(`→ 成片「${label}」已就绪`)
     } else if (t.type === 'llmConfig') {
-      lines.push(`→ LLM 节点「${label}」`)
+      lines.push(`→ 长文「${label}」`)
     } else {
       lines.push(`→ ${t.type}「${label}」`)
     }
@@ -618,7 +674,7 @@ const reflectTargetNode = computed(() => {
 })
 
 // Input placeholder | 输入占位符
-const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡通角色"'
+const inputPlaceholder = '写一句想法，回车丢到画布上'
 
 // Quick suggestions | 快捷建议
 const suggestions = [
@@ -629,7 +685,7 @@ const suggestions = [
 ]
 
 // Add new node at flow coordinates (centered on point) | 在指定流坐标添加节点
-const addNewNodeAt = async (type, flowPoint) => {
+const addNewNodeAt = (type, flowPoint) => {
   const nodeId = addNode(type, {
     x: flowPoint.x - 100,
     y: flowPoint.y - 70
@@ -638,13 +694,14 @@ const addNewNodeAt = async (type, flowPoint) => {
   updateNode(nodeId, { zIndex: maxZIndex + 1 })
   setTimeout(() => updateNodeInternals(nodeId), 50)
   showNodeMenu.value = false
+  return nodeId
 }
 
 // Add new node | 添加新节点（视口中心）
-const addNewNode = async (type) => {
+const addNewNode = (type) => {
   const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
   const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
-  await addNewNodeAt(type, { x: viewportCenterX, y: viewportCenterY })
+  addNewNodeAt(type, { x: viewportCenterX, y: viewportCenterY })
 }
 
 // Handle add workflow from panel | 处理从面板添加工作流
@@ -698,83 +755,65 @@ const handleAddWorkflow = ({ workflow, options }) => {
     })
   }, 100)
 
-  window.$message?.success(`已添加工作流: ${workflow.name}`)
+  message.success(`已添加工作流: ${workflow.name}`)
 }
 
-// Handle connection | 处理连接
-const onConnect = (params) => {
-  // Check connection types | 检查连接类型
+/** Create edge with correct type (also used after wire-drop new node) | 创建边（含类型分支） */
+const commitEdgeFromConnection = (params) => {
   const sourceNode = nodes.value.find(n => n.id === params.source)
   const targetNode = nodes.value.find(n => n.id === params.target)
-  
+
   if (sourceNode?.type === 'image' && targetNode?.type === 'videoConfig') {
-    // Use imageRole edge type | 使用图片角色边类型
     addEdge({
       ...params,
       type: 'imageRole',
-      data: { imageRole: 'first_frame_image' } // Default to first frame | 默认首帧
+      data: { imageRole: 'first_frame_image' }
     })
   } else if (sourceNode?.type === 'text' && targetNode?.type === 'imageConfig') {
-    // Use promptOrder edge type | 使用提示词顺序边类型
-    // Calculate next order number | 计算下一个顺序号
-    const existingTextEdges = edges.value.filter(e => 
+    const existingTextEdges = edges.value.filter(e =>
       e.target === params.target && e.type === 'promptOrder'
     )
     const nextOrder = existingTextEdges.length + 1
-    
     addEdge({
       ...params,
       type: 'promptOrder',
       data: { promptOrder: nextOrder }
     })
   } else if (sourceNode?.type === 'image' && targetNode?.type === 'imageConfig') {
-    // Use imageOrder edge type | 使用图片顺序边类型
-    // Calculate next order number | 计算下一个顺序号
     const existingImageEdges = edges.value.filter(e =>
       e.target === params.target && e.type === 'imageOrder'
     )
-
-    // Get @ mentioned image count from connected TextNodes | 获取已连接 TextNode 中 @ 提及的图片数量
     let mentionedImageCount = 0
     const connectedTextEdges = edges.value.filter(e => e.target === params.target)
     for (const edge of connectedTextEdges) {
-      const sourceNode = nodes.value.find(n => n.id === edge.source)
-      if (sourceNode?.type === 'text') {
-        const content = sourceNode.data?.content || ''
-        // Count @ mentions of image nodes | 统计图片节点的 @ 提及
+      const sn = nodes.value.find(n => n.id === edge.source)
+      if (sn?.type === 'text') {
+        const content = sn.data?.content || ''
         const mentionRegex = /@\[([^\]|]+)(?:\|([^\]]+))?\]/g
         let match
         while ((match = mentionRegex.exec(content)) !== null) {
           const mentionedNode = nodes.value.find(n => n.id === match[1])
-          if (mentionedNode?.type === 'image') {
-            mentionedImageCount++
-          }
+          if (mentionedNode?.type === 'image') mentionedImageCount++
         }
       }
     }
-
-    // Next order = existing edges + mentioned image count + 1 | 下一个序号 = 现有边数 + @提及图片数 + 1
     const nextOrder = existingImageEdges.length + mentionedImageCount + 1
-
     addEdge({
       ...params,
       type: 'imageOrder',
       data: { imageOrder: nextOrder }
     })
   } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'imageConfig') {
-    // LLM output as prompt for image generation | LLM 输出作为图片生成提示词
     const existingTextEdges = edges.value.filter(e =>
       e.target === params.target && e.type === 'promptOrder'
     )
     const nextOrder = existingTextEdges.length + 1
-
     addEdge({
       ...params,
       type: 'promptOrder',
       data: { promptOrder: nextOrder }
     })
   } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'videoConfig') {
-    // LLM output as prompt for video generation | LLM 输出作为视频生成提示词
     addEdge({
       ...params,
       type: 'promptOrder',
@@ -783,6 +822,51 @@ const onConnect = (params) => {
   } else {
     addEdge(params)
   }
+}
+
+const onConnectStart = (payload) => {
+  if (payload?.nodeId) {
+    connectionDragOrigin = {
+      source: payload.nodeId,
+      sourceHandle: payload.handleId || 'right'
+    }
+  } else {
+    connectionDragOrigin = null
+  }
+  const ev = payload?.event
+  if (ev) {
+    const cx = ev.clientX ?? ev.touches?.[0]?.clientX
+    const cy = ev.clientY ?? ev.touches?.[0]?.clientY
+    if (cx != null && cy != null) {
+      lastConnectPointer.x = cx
+      lastConnectPointer.y = cy
+      clearConnectPauseTimer()
+      nextTick(() => armConnectPauseTimer(payload.nodeId, payload.handleId))
+    }
+  }
+}
+
+const onConnect = (params) => {
+  connectionDragOrigin = null
+  clearConnectPauseTimer()
+  commitEdgeFromConnection(params)
+}
+
+/** 线没挂上合法接口时：松手弹出选块面板 | 拖线落在空白处 */
+const onConnectEnd = (event) => {
+  const origin = connectionDragOrigin
+  connectionDragOrigin = null
+  clearConnectPauseTimer()
+  if (dblClickPalette.value.open) return
+  if (!origin) return
+  const cx = event?.clientX ?? event?.changedTouches?.[0]?.clientX
+  const cy = event?.clientY ?? event?.changedTouches?.[0]?.clientY
+  if (cx == null || cy == null) return
+  const flow = project({ x: cx, y: cy })
+  openDblClickPalette(cx, cy, flow, {
+    source: origin.source,
+    sourceHandle: origin.sourceHandle
+  })
 }
 const onNodeClick = (event) => {
   // nodes.value.forEach(node => {
@@ -841,7 +925,7 @@ const handleProjectAction = (key) => {
       break
     case 'duplicate':
       // TODO: Implement duplicate
-      window.$message?.info('复制功能开发中')
+      message.info('复制功能开发中')
       break
     case 'delete':
       showDeleteModal.value = true
@@ -854,7 +938,7 @@ const confirmRename = () => {
   const projectId = route.params.id
   if (renameValue.value.trim()) {
     renameProject(projectId, renameValue.value.trim())
-    window.$message?.success('已重命名')
+    message.success('已重命名')
   }
   showRenameModal.value = false
 }
@@ -864,7 +948,7 @@ const confirmDelete = () => {
   const projectId = route.params.id
   // deleteProject(projectId) // TODO: import deleteProject
   showDeleteModal.value = false
-  window.$message?.success('项目已删除')
+  message.success('项目已删除')
   router.push('/')
 }
 
@@ -878,11 +962,11 @@ const handleEnterKey = (e) => {
 const handleReflectEvolve = async () => {
   const node = reflectTargetNode.value
   if (!node) {
-    window.$message?.warning('请先选中一个「文本」或「LLM」节点')
+    message.warning('先选中一块「文字」或「长文」')
     return
   }
   if (!isApiConfigured.value) {
-    window.$message?.warning('请先配置 API Key')
+    message.warning('请先配置 API Key')
     showApiSettings.value = true
     return
   }
@@ -892,7 +976,7 @@ const handleReflectEvolve = async () => {
   if (node.type === 'llmConfig') body = (node.data?.systemPrompt || '').trim()
 
   if (!body) {
-    window.$message?.warning('节点内暂无可用文案')
+    message.warning('节点内暂无可用文案')
     return
   }
 
@@ -909,10 +993,10 @@ const handleReflectEvolve = async () => {
         updateNode(node.id, { systemPrompt: result })
       }
       setTimeout(() => updateNodeInternals(node.id), 30)
-      window.$message?.success('已根据上下文完成反思进化')
+      message.success('已推敲一版')
     }
   } catch (err) {
-    window.$message?.error(err.message || '反思进化失败')
+    message.error(err.message || '推敲失败')
   } finally {
     isProcessing.value = false
   }
@@ -925,7 +1009,7 @@ const handlePolish = async () => {
   
   // Check API configuration | 检查 API 配置
   if (!isApiConfigured.value) {
-    window.$message?.warning('请先配置 API Key')
+    message.warning('请先配置 API Key')
     showApiSettings.value = true
     return
   }
@@ -939,11 +1023,11 @@ const handlePolish = async () => {
     
     if (result) {
       chatInput.value = result
-      window.$message?.success('提示词已润色')
+      message.success('已润色')
     }
   } catch (err) {
     chatInput.value = originalInput
-    window.$message?.error(err.message || '润色失败')
+    message.error(err.message || '润色失败')
   } finally {
     isProcessing.value = false
   }
@@ -954,9 +1038,9 @@ const sendMessage = async () => {
   const input = chatInput.value.trim()
   if (!input) return
 
-  // Check API configuration | 检查 API 配置
-  if (!isApiConfigured.value) {
-    window.$message?.warning('请先配置 API Key')
+  // 连放模式需要 API；手动模式仅本地加节点，可不配置
+  if (autoExecute.value && !isApiConfigured.value) {
+    message.warning('开启「连放」需要先配置 API Key')
     showApiSettings.value = true
     return
   }
@@ -976,7 +1060,7 @@ const sendMessage = async () => {
 
     if (autoExecute.value) {
       // Auto-execute mode: analyze intent and execute workflow | 自动执行模式：分析意图并执行工作流
-      window.$message?.info('正在分析工作流...')
+      message.info('正在分析工作流...')
       
       try {
         // Analyze user intent | 分析用户意图
@@ -991,27 +1075,27 @@ const sendMessage = async () => {
           shots: result?.shots
         }
         
-        window.$message?.info(`执行工作流: ${result?.description || '文生图'}`)
+        message.info(`执行: ${result?.description || '出图'}`)
         
         // Execute the workflow | 执行工作流
         await executeWorkflow(workflowParams, { x: baseX, y: baseY })
         
-        window.$message?.success('工作流已启动')
+        message.success('工作流已启动')
       } catch (err) {
         console.error('Workflow error:', err)
         // Fallback to simple text-to-image | 回退到文生图
-        window.$message?.warning('使用默认文生图工作流')
+        message.warning('改用默认出图流')
         await createTextToImageWorkflow(content, { x: baseX, y: baseY })
       }
     } else {
       // Manual mode: just create nodes | 手动模式：仅创建节点
       const textNodeId = addNode('text', { x: baseX, y: baseY }, { 
         content: content, 
-        label: '提示词' 
+        label: '一句' 
       })
       
       const imageConfigNodeId = addNode('imageConfig', { x: baseX + 400, y: baseY }, {
-        label: '文生图'
+        label: '出图'
       })
       
       addEdge({
@@ -1022,7 +1106,7 @@ const sendMessage = async () => {
       })
     }
   } catch (err) {
-    window.$message?.error(err.message || '创建失败')
+    message.error(err.message || '创建失败')
   } finally {
     isProcessing.value = false
   }
@@ -1101,6 +1185,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
   window.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('pointermove', onPointerMoveWhileConnecting)
+  clearConnectPauseTimer()
   // Save project before leaving | 离开前保存项目
   saveProject()
 })
